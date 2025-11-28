@@ -1,0 +1,5 @@
+{
+  "name": "Gerenciador PattyCroche",
+  "description": "Um aplicativo completo para artesãos de amigurumi e crochê. Gerencie seu catálogo de receitas, controle pedidos com marcadores de progresso individuais e utilize a precificação reversa para marketplaces (Shopee, Elo7, Nuvemshop).",
+  "requestFramePermissions": []
+}
