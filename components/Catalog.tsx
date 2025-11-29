@@ -1,11 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, FileText, Image as ImageIcon, Package, ArrowUpDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, FileText, Image as ImageIcon, Package, ArrowUpDown, X, ExternalLink } from 'lucide-react';
 import { Product } from '../types';
 import * as storage from '../services/storage_supabase';
 
 export const Catalog: React.FC = () => {
+  // Helper para gerar UUID compatível com todos os navegadores
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const [products, setProducts] = useState<Product[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOption, setSortOption] = useState('name_asc');
@@ -64,7 +73,7 @@ export const Catalog: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const productToSave: Product = {
-      id: editingProduct ? editingProduct.id : crypto.randomUUID(),
+      id: editingProduct ? editingProduct.id : generateUUID(),
       name: formData.name || 'Sem nome',
       basePrice: Number(formData.basePrice) || 0,
       photoUrl: formData.photoUrl || 'https://picsum.photos/200',
@@ -148,47 +157,80 @@ export const Catalog: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="space-y-3">
         {filteredAndSortedProducts.map(product => (
-          <div key={product.id} className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden flex flex-col">
-            <div className="h-48 overflow-hidden bg-stone-100 relative group">
+          <div
+            key={product.id}
+            onClick={() => setViewingProduct(product)}
+            className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-4 hover:border-rose-300 hover:shadow-md transition group cursor-pointer"
+          >
+
+            {/* Product Thumb */}
+            <div className="w-20 h-20 bg-stone-100 rounded-lg overflow-hidden shrink-0 relative">
               <img
                 src={product.photoUrl}
                 alt={product.name}
-                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                className="w-full h-full object-cover"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = 'https://picsum.photos/200';
                 }}
               />
-              <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-xs font-bold shadow-sm">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between items-start">
+                <h3 className="font-bold text-stone-800 truncate text-lg">{product.name}</h3>
+                <span className="font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg text-sm whitespace-nowrap">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
+                </span>
+              </div>
+
+              <p className="text-sm text-stone-500 line-clamp-2 mt-1">{product.description}</p>
+
+              {/* Dimensions/Details Tags */}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {product.weight && (
+                  <span className="text-xs text-stone-400 bg-stone-50 px-2 py-0.5 rounded flex items-center gap-1">
+                    <Package size={10} /> {product.weight}
+                  </span>
+                )}
+                {product.pdfLink && (
+                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">
+                    <FileText size={10} /> PDF
+                  </span>
+                )}
               </div>
             </div>
 
-            <div className="p-4 flex-1 flex flex-col">
-              <h3 className="font-bold text-lg text-stone-800 mb-1">{product.name}</h3>
-              <p className="text-sm text-stone-500 line-clamp-2 mb-4 flex-1">{product.description}</p>
-
-              <div className="flex items-center gap-2 pt-4 border-t border-stone-100 mt-auto">
-                <button
-                  onClick={() => handleOpenModal(product)}
-                  className="flex-1 py-2 text-sm text-stone-600 bg-stone-50 hover:bg-stone-100 rounded flex items-center justify-center gap-2"
-                >
-                  <Edit2 size={16} /> Editar
-                </button>
-                <button
-                  onClick={() => handleDelete(product.id)}
-                  className="p-2 text-rose-500 hover:bg-rose-50 rounded"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
+            {/* Actions */}
+            <div className="flex items-center gap-2 pl-2 border-l border-stone-100 ml-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenModal(product);
+                }}
+                className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition"
+                title="Editar"
+              >
+                <Edit2 size={18} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(product.id);
+                }}
+                className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"
+                title="Excluir"
+              >
+                <Trash2 size={18} />
+              </button>
             </div>
           </div>
         ))}
 
         {filteredAndSortedProducts.length === 0 && (
-          <div className="col-span-full text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-300">
+          <div className="text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-300">
             <p>Nenhum produto encontrado.</p>
           </div>
         )}
@@ -288,6 +330,103 @@ export const Catalog: React.FC = () => {
                   <button type="submit" className="flex-1 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700">Salvar</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Product Details Modal */}
+      {viewingProduct && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+            <button
+              onClick={() => setViewingProduct(null)}
+              className="absolute top-4 right-4 p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition z-10"
+            >
+              <X size={20} className="text-stone-600" />
+            </button>
+
+            <div className="p-0">
+              {/* Header Image */}
+              <div className="w-full h-64 bg-stone-100 relative">
+                <img
+                  src={viewingProduct.photoUrl}
+                  alt={viewingProduct.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://picsum.photos/400/300';
+                  }}
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-6 pt-20">
+                  <h2 className="text-3xl font-bold text-white shadow-sm">{viewingProduct.name}</h2>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                {/* Price and Basic Info */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <span className="text-3xl font-bold text-rose-600">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingProduct.basePrice)}
+                    </span>
+                    <p className="text-stone-500 mt-1">Preço Base Sugerido</p>
+                  </div>
+
+                  {viewingProduct.pdfLink && (
+                    <a
+                      href={viewingProduct.pdfLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition font-medium"
+                    >
+                      <FileText size={18} />
+                      Abrir PDF
+                      <ExternalLink size={14} />
+                    </a>
+                  )}
+                </div>
+
+                {/* Description */}
+                {viewingProduct.description && (
+                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
+                    <h3 className="font-semibold text-stone-800 mb-2">Descrição</h3>
+                    <p className="text-stone-600 leading-relaxed whitespace-pre-wrap">{viewingProduct.description}</p>
+                  </div>
+                )}
+
+                {/* Dimensions */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Peso</span>
+                    <span className="font-medium text-stone-700">{viewingProduct.weight || '-'}</span>
+                  </div>
+                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Altura</span>
+                    <span className="font-medium text-stone-700">{viewingProduct.height || '-'}</span>
+                  </div>
+                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Largura</span>
+                    <span className="font-medium text-stone-700">{viewingProduct.width || '-'}</span>
+                  </div>
+                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Comprimento</span>
+                    <span className="font-medium text-stone-700">{viewingProduct.length || '-'}</span>
+                  </div>
+                </div>
+
+                {/* Recipe Text */}
+                {viewingProduct.recipeText && (
+                  <div>
+                    <h3 className="font-semibold text-stone-800 mb-3 flex items-center gap-2">
+                      <FileText size={18} className="text-rose-500" />
+                      Receita Escrita
+                    </h3>
+                    <div className="bg-stone-900 text-stone-100 p-4 rounded-xl font-mono text-sm overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner">
+                      {viewingProduct.recipeText}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

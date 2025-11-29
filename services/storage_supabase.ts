@@ -7,7 +7,7 @@ import { Product, Order, Client } from '../types';
 export const getProducts = async (): Promise<Product[]> => {
     if (!supabase) {
         console.warn('Supabase client not initialized. Returning empty products list.');
-        return [];
+        throw new Error('Supabase client not initialized');
     }
     const { data, error } = await supabase
         .from('products')
@@ -38,7 +38,7 @@ export const getProducts = async (): Promise<Product[]> => {
 export const saveProduct = async (product: Product): Promise<void> => {
     if (!supabase) {
         console.warn('Supabase client not initialized. Cannot save product.');
-        return;
+        throw new Error('Supabase client not initialized');
     }
     const dbProduct = {
         id: product.id,
@@ -61,6 +61,7 @@ export const saveProduct = async (product: Product): Promise<void> => {
 
     if (error) {
         console.error('Error saving product:', error);
+        console.log('Product data being saved:', dbProduct);
         throw error;
     }
 };
@@ -68,7 +69,7 @@ export const saveProduct = async (product: Product): Promise<void> => {
 export const deleteProduct = async (id: string): Promise<void> => {
     if (!supabase) {
         console.warn('Supabase client not initialized. Cannot delete product.');
-        return;
+        throw new Error('Supabase client not initialized');
     }
     const { error } = await supabase
         .from('products')
@@ -115,7 +116,7 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
 // --- Clients ---
 
 export const getClients = async (): Promise<Client[]> => {
-    if (!supabase) return [];
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase
         .from('clients')
         .select('*')
@@ -130,7 +131,7 @@ export const getClients = async (): Promise<Client[]> => {
 };
 
 export const saveClient = async (client: Client): Promise<void> => {
-    if (!supabase) return;
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase
         .from('clients')
         .upsert(client);
@@ -142,7 +143,7 @@ export const saveClient = async (client: Client): Promise<void> => {
 };
 
 export const deleteClient = async (id: string): Promise<void> => {
-    if (!supabase) return;
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase
         .from('clients')
         .delete()
@@ -173,7 +174,7 @@ export const getClientById = async (id: string): Promise<Client | undefined> => 
 // --- Orders ---
 
 export const getOrders = async (): Promise<Order[]> => {
-    if (!supabase) return [];
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase
         .from('orders')
         .select('*')
@@ -201,7 +202,7 @@ export const getOrders = async (): Promise<Order[]> => {
 };
 
 export const saveOrder = async (order: Order): Promise<void> => {
-    if (!supabase) return;
+    if (!supabase) throw new Error('Supabase client not initialized');
     const dbOrder = {
         id: order.id,
         client_id: order.clientId,
@@ -228,7 +229,7 @@ export const saveOrder = async (order: Order): Promise<void> => {
 };
 
 export const deleteOrder = async (id: string): Promise<void> => {
-    if (!supabase) return;
+    if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase
         .from('orders')
         .delete()

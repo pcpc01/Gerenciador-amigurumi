@@ -8,6 +8,14 @@ interface Props {
 }
 
 export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
+  // Helper para gerar UUID compatível com todos os navegadores
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -120,39 +128,51 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
     const clientName = client ? client.name : formData.clientName;
     const whatsapp = client ? client.whatsapp : formData.whatsapp;
 
-    if (!product || !clientName) return;
-
-    // Preserve existing order data if editing
-    let existingOrder: Order | undefined;
-    if (editingOrderId) {
-      existingOrder = orders.find(o => o.id === editingOrderId);
+    if (!product || !clientName) {
+      alert('Por favor, selecione um cliente e um produto.');
+      return;
     }
 
-    const newOrder: Order = {
-      id: editingOrderId || crypto.randomUUID(),
-      clientName: clientName,
-      whatsapp: whatsapp,
-      clientId: formData.clientId,
-      productId: formData.productId,
-      orderDate: formData.orderDate,
-      deliveryDate: formData.deliveryDate,
-      finalPrice: parseFloat(formData.finalPrice),
-      status: existingOrder ? existingOrder.status : 'pending',
-      progressNotes: existingOrder ? existingOrder.progressNotes : '',
-      currentStep: existingOrder ? existingOrder.currentStep : 0,
-      orderSource: formData.orderSource
-    };
+    try {
+      // Preserve existing order data if editing
+      let existingOrder: Order | undefined;
+      if (editingOrderId) {
+        existingOrder = orders.find(o => o.id === editingOrderId);
+      }
 
-    await storage.saveOrder(newOrder);
-    setIsModalOpen(false);
-    resetForm();
-    loadData();
+      const newOrder: Order = {
+        id: editingOrderId || generateUUID(),
+        clientName: clientName,
+        whatsapp: whatsapp,
+        clientId: formData.clientId,
+        productId: formData.productId,
+        orderDate: formData.orderDate,
+        deliveryDate: formData.deliveryDate,
+        finalPrice: parseFloat(formData.finalPrice),
+        status: existingOrder ? existingOrder.status : 'pending',
+        progressNotes: existingOrder ? existingOrder.progressNotes : '',
+        currentStep: existingOrder ? existingOrder.currentStep : 0,
+        orderSource: formData.orderSource
+      };
+
+      await storage.saveOrder(newOrder);
+      setIsModalOpen(false);
+      resetForm();
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao salvar encomenda:', error);
+      if (error.message === 'Supabase client not initialized') {
+        alert('Erro de Configuração: O Supabase não foi inicializado. Verifique se as variáveis de ambiente (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY) estão configuradas corretamente no arquivo .env.local.');
+      } else {
+        alert(`Ocorreu um erro ao salvar a encomenda: ${error.message || 'Erro desconhecido'}`);
+      }
+    }
   };
 
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const productToSave: Product = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: newProductData.name || 'Sem nome',
       basePrice: Number(newProductData.basePrice) || 0,
       photoUrl: newProductData.photoUrl || 'https://picsum.photos/200',
@@ -165,67 +185,85 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
       length: newProductData.length || ''
     };
 
-    await storage.saveProduct(productToSave);
+    try {
+      await storage.saveProduct(productToSave);
 
-    // Refresh products list
-    const updatedProducts = await storage.getProducts();
-    setProducts(updatedProducts);
+      // Refresh products list
+      const updatedProducts = await storage.getProducts();
+      setProducts(updatedProducts);
 
-    // Select the new product in the order form
-    setFormData(prev => ({
-      ...prev,
-      productId: productToSave.id,
-      finalPrice: productToSave.basePrice.toString()
-    }));
+      // Select the new product in the order form
+      setFormData(prev => ({
+        ...prev,
+        productId: productToSave.id,
+        finalPrice: productToSave.basePrice.toString()
+      }));
 
-    // Reset and close product modal
-    setNewProductData({
-      name: '',
-      basePrice: 0,
-      photoUrl: '',
-      description: '',
-      recipeText: '',
-      pdfLink: '',
-      weight: '',
-      height: '',
-      width: '',
-      length: ''
-    });
-    setIsProductModalOpen(false);
+      // Reset and close product modal
+      setNewProductData({
+        name: '',
+        basePrice: 0,
+        photoUrl: '',
+        description: '',
+        recipeText: '',
+        pdfLink: '',
+        weight: '',
+        height: '',
+        width: '',
+        length: ''
+      });
+      setIsProductModalOpen(false);
+    } catch (error: any) {
+      console.error('Erro ao salvar produto:', error);
+      if (error.message === 'Supabase client not initialized') {
+        alert('Erro de Configuração: O Supabase não foi inicializado. Verifique seu arquivo .env.local.');
+      } else {
+        alert(`Erro ao salvar produto: ${error.message || 'Erro desconhecido'}`);
+      }
+    }
   };
 
   const handleClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const clientToSave: Client = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       name: newClientData.name || 'Sem nome',
       whatsapp: newClientData.whatsapp || '',
       address: newClientData.address || '',
       notes: newClientData.notes || ''
     };
 
-    await storage.saveClient(clientToSave);
+    try {
+      await storage.saveClient(clientToSave);
 
-    // Refresh clients list
-    const updatedClients = await storage.getClients();
-    setClients(updatedClients);
+      // Refresh clients list
+      const updatedClients = await storage.getClients();
+      setClients(updatedClients);
 
-    // Select the new client
-    setFormData(prev => ({
-      ...prev,
-      clientId: clientToSave.id,
-      clientName: clientToSave.name,
-      whatsapp: clientToSave.whatsapp
-    }));
+      // Select the new client
+      setFormData(prev => ({
+        ...prev,
+        clientId: clientToSave.id,
+        clientName: clientToSave.name,
+        whatsapp: clientToSave.whatsapp
+      }));
 
-    // Reset and close
-    setNewClientData({
-      name: '',
-      whatsapp: '',
-      address: '',
-      notes: ''
-    });
-    setIsClientModalOpen(false);
+      // Reset and close
+      setNewClientData({
+        name: '',
+        whatsapp: '',
+        address: '',
+        notes: ''
+      });
+      setIsClientModalOpen(false);
+    } catch (error: any) {
+      console.error('Erro ao salvar cliente:', error);
+      if (error.message === 'Supabase client not initialized') {
+        alert('Erro de Configuração: O Supabase não foi inicializado. Verifique seu arquivo .env.local.');
+      } else {
+        alert(`Erro ao salvar cliente: ${error.message || 'Erro desconhecido'}`);
+      }
+    }
   };
 
   const getProductDetails = (id: string) => products.find(p => p.id === id);

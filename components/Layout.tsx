@@ -24,8 +24,8 @@ export const Layout: React.FC<Props> = ({ currentView, onChangeView, children })
           <div className="w-8" /> {/* Spacer to center logo */}
           <img
             src="https://i.ibb.co/ZRBCN1DR/image.png"
-            alt="Logo"
-            className="h-12 object-contain"
+            alt="Patty Crochê Logo"
+            className="h-16 object-contain"
           />
           <button
             onClick={signOut}
@@ -45,21 +45,21 @@ export const Layout: React.FC<Props> = ({ currentView, onChangeView, children })
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 shadow-lg z-40 pb-safe">
           <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
             <button
-              onClick={() => onChangeView('catalog')}
-              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${currentView === 'catalog' ? 'text-rose-600' : 'text-stone-400 hover:text-stone-600'
-                }`}
-            >
-              <List size={24} />
-              <span className="text-[10px] font-medium">Catálogo</span>
-            </button>
-
-            <button
               onClick={() => onChangeView('orders')}
               className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${currentView === 'orders' ? 'text-rose-600' : 'text-stone-400 hover:text-stone-600'
                 }`}
             >
               <Home size={24} />
               <span className="text-[10px] font-medium">Pedidos</span>
+            </button>
+
+            <button
+              onClick={() => onChangeView('catalog')}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${currentView === 'catalog' ? 'text-rose-600' : 'text-stone-400 hover:text-stone-600'
+                }`}
+            >
+              <List size={24} />
+              <span className="text-[10px] font-medium">Catálogo</span>
             </button>
 
             <button

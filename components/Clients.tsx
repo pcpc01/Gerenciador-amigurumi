@@ -4,6 +4,14 @@ import { Client } from '../types';
 import * as storage from '../services/storage_supabase';
 
 export const Clients: React.FC = () => {
+  // Helper para gerar UUID compatível com todos os navegadores
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const [clients, setClients] = useState<Client[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
@@ -51,7 +59,7 @@ export const Clients: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const clientToSave: Client = {
-      id: editingClient ? editingClient.id : crypto.randomUUID(),
+      id: editingClient ? editingClient.id : generateUUID(),
       name: formData.name || 'Sem nome',
       whatsapp: formData.whatsapp || '',
       address: formData.address || '',
@@ -94,55 +102,62 @@ export const Clients: React.FC = () => {
         <Search className="absolute left-3 top-2.5 text-stone-400" size={18} />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="space-y-3">
         {filteredClients.map(client => (
-          <div key={client.id} className="bg-white p-5 rounded-xl shadow-sm border border-stone-200 flex flex-col relative group">
+          <div key={client.id} className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-4 hover:border-rose-300 hover:shadow-md transition group">
 
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-rose-100 rounded-full flex items-center justify-center text-rose-600">
-                  <User size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-stone-800 leading-tight">{client.name}</h3>
-                </div>
+            {/* Avatar */}
+            <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center text-rose-600 shrink-0">
+              <User size={24} />
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-lg text-stone-800 leading-tight truncate">{client.name}</h3>
+
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                {client.whatsapp && (
+                  <a
+                    href={`https://wa.me/55${client.whatsapp.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-sm text-stone-600 hover:text-green-600 hover:underline transition"
+                  >
+                    <Phone size={12} className="text-green-500" />
+                    <span>{client.whatsapp}</span>
+                  </a>
+                )}
+                {client.address && (
+                  <div className="flex items-center gap-1 text-sm text-stone-600">
+                    <MapPin size={12} className="text-stone-400" />
+                    <span className="truncate max-w-[200px] md:max-w-md">{client.address}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="space-y-3 flex-1">
-              {client.whatsapp && (
-                <div className="flex items-center gap-2 text-sm text-stone-600">
-                  <Phone size={14} className="text-green-500" />
-                  <span>{client.whatsapp}</span>
-                </div>
-              )}
-              {client.address && (
-                <div className="flex items-start gap-2 text-sm text-stone-600">
-                  <MapPin size={14} className="text-stone-400 mt-0.5 shrink-0" />
-                  <span className="line-clamp-2">{client.address}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 pt-4 border-t border-stone-100 mt-4">
+            {/* Actions */}
+            <div className="flex items-center gap-2 pl-2 border-l border-stone-100 ml-2">
               <button
                 onClick={() => handleOpenModal(client)}
-                className="flex-1 py-2 text-sm text-stone-600 bg-stone-50 hover:bg-stone-100 rounded flex items-center justify-center gap-2"
+                className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition"
+                title="Editar"
               >
-                <Edit2 size={16} /> Editar
+                <Edit2 size={18} />
               </button>
               <button
                 onClick={() => handleDelete(client.id)}
-                className="p-2 text-rose-500 hover:bg-rose-50 rounded"
+                className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"
+                title="Excluir"
               >
-                <Trash2 size={16} />
+                <Trash2 size={18} />
               </button>
             </div>
           </div>
         ))}
 
         {filteredClients.length === 0 && (
-          <div className="col-span-full text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-300">
+          <div className="text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-300">
             <p>Nenhum cliente encontrado.</p>
           </div>
         )}
