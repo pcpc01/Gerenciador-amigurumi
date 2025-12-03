@@ -1,7 +1,91 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, FileText, Image as ImageIcon, Package, ArrowUpDown, X, ExternalLink } from 'lucide-react';
-import { Product } from '../types';
+import { Product, Category } from '../types';
 import * as storage from '../services/storage_supabase';
+import { uploadToCloudinary } from '../services/cloudinary';
+
+import ReactMarkdown from 'react-markdown';
+
+const ExpandableText = ({
+  text,
+  maxLength = 150,
+  className = "text-stone-600 leading-relaxed",
+  buttonClassName = "text-rose-600 text-sm font-medium mt-2 hover:underline focus:outline-none"
+}: {
+  text: string,
+  maxLength?: number,
+  className?: string,
+  buttonClassName?: string
+}) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Função simples para converter HTML para Markdown
+  const convertHtmlToMarkdown = (html: string) => {
+    let markdown = html
+      // Remove quebras de linha do código fonte HTML para evitar formatação quebrada
+      .replace(/[\r\n]+/g, ' ')
+      .trim()
+      // Listas
+      .replace(/<ul[^>]*>/gi, '\n')
+      .replace(/<\/ul>/gi, '\n')
+      .replace(/<li[^>]*>\s*/gi, '\n- ') // Quebra linha antes do item e adiciona marcador
+      .replace(/<\/li>/gi, '') // Remove fechamento de li
+      // Parágrafos e quebras
+      .replace(/<p[^>]*>/gi, '\n\n')
+      .replace(/<\/p>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      // Formatação básica
+      .replace(/<strong[^>]*>/gi, '**')
+      .replace(/<\/strong>/gi, '**')
+      .replace(/<b[^>]*>/gi, '**')
+      .replace(/<\/b>/gi, '**')
+      .replace(/<em[^>]*>/gi, '*')
+      .replace(/<\/em>/gi, '*')
+      .replace(/<i[^>]*>/gi, '*')
+      .replace(/<\/i>/gi, '*')
+      // Entidades HTML comuns
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+
+    // Remove tags restantes
+    markdown = markdown.replace(/<[^>]*>/g, '');
+
+    // Limpa múltiplas quebras de linha consecutivas (max 2) e espaços extras
+    return markdown.replace(/\n\s+\n/g, '\n\n').replace(/\n{3,}/g, '\n\n').trim();
+  };
+
+  const isHtml = /<[a-z][\s\S]*>/i.test(text);
+  const cleanText = isHtml ? convertHtmlToMarkdown(text) : text;
+
+  // Se o texto for curto, exibe tudo renderizado como Markdown
+  if (cleanText.length <= maxLength) {
+    return (
+      <div className={`markdown-content ${className}`}>
+        <ReactMarkdown>{cleanText}</ReactMarkdown>
+      </div>
+    );
+  }
+
+  // Se for longo, controla a exibição
+  const contentToShow = isExpanded ? cleanText : `${cleanText.slice(0, maxLength)}...`;
+
+  return (
+    <div>
+      <div className={`markdown-content ${className}`}>
+        <ReactMarkdown>{contentToShow}</ReactMarkdown>
+      </div>
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={buttonClassName}
+      >
+        {isExpanded ? 'Ver menos' : 'Ver mais'}
+      </button>
+    </div>
+  );
+};
 
 export const Catalog: React.FC = () => {
   // Helper para gerar UUID compatível com todos os navegadores
@@ -18,10 +102,14 @@ export const Catalog: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOption, setSortOption] = useState('name_asc');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
+    categoryId: '',
+    category: '',
     basePrice: 0,
     photoUrl: '',
     description: '',
@@ -34,8 +122,17 @@ export const Catalog: React.FC = () => {
   });
 
   useEffect(() => {
-    loadProducts();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    const [prods, cats] = await Promise.all([
+      storage.getProducts(),
+      storage.getCategories()
+    ]);
+    setProducts(prods);
+    setAvailableCategories(cats);
+  };
 
   const loadProducts = async () => {
     setProducts(await storage.getProducts());
@@ -49,6 +146,7 @@ export const Catalog: React.FC = () => {
       setEditingProduct(null);
       setFormData({
         name: '',
+        category: '',
         basePrice: 0,
         photoUrl: '',
         description: '',
@@ -70,11 +168,40 @@ export const Catalog: React.FC = () => {
     }
   };
 
+  const handleAddCategory = async () => {
+    const newCategoryName = prompt("Nome da nova categoria:");
+    if (newCategoryName && newCategoryName.trim()) {
+      const trimmed = newCategoryName.trim();
+
+      // Check if already exists
+      if (availableCategories.some(c => c.name.toLowerCase() === trimmed.toLowerCase())) {
+        alert('Categoria já existe!');
+        return;
+      }
+
+      const newCategory: Category = {
+        id: generateUUID(),
+        name: trimmed
+      };
+
+      try {
+        await storage.saveCategory(newCategory);
+        setAvailableCategories(prev => [...prev, newCategory].sort((a, b) => a.name.localeCompare(b.name)));
+        setFormData(prev => ({ ...prev, categoryId: newCategory.id, category: newCategory.name }));
+      } catch (error) {
+        console.error('Error saving category:', error);
+        alert('Erro ao salvar categoria.');
+      }
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const productToSave: Product = {
       id: editingProduct ? editingProduct.id : generateUUID(),
       name: formData.name || 'Sem nome',
+      categoryId: formData.categoryId,
+      category: formData.category || '',
       basePrice: Number(formData.basePrice) || 0,
       photoUrl: formData.photoUrl || 'https://picsum.photos/200',
       description: formData.description || '',
@@ -94,6 +221,7 @@ export const Catalog: React.FC = () => {
 
   const filteredAndSortedProducts = products
     .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    .filter(p => filterCategory ? p.categoryId === filterCategory : true)
     .sort((a, b) => {
       switch (sortOption) {
         case 'name_asc':
@@ -137,6 +265,22 @@ export const Catalog: React.FC = () => {
           <Search className="absolute left-3 top-2.5 text-stone-400" size={18} />
         </div>
 
+        <div className="relative min-w-[180px]">
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="appearance-none w-full bg-white border border-stone-300 text-stone-700 py-2 pl-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-sm cursor-pointer"
+          >
+            <option value="">Todas Categorias</option>
+            {availableCategories.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
+            ))}
+          </select>
+          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-stone-500">
+            <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+          </div>
+        </div>
+
         <div className="relative min-w-[200px]">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-stone-500">
             <ArrowUpDown size={16} />
@@ -157,80 +301,102 @@ export const Catalog: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-3">
-        {filteredAndSortedProducts.map(product => (
-          <div
-            key={product.id}
-            onClick={() => setViewingProduct(product)}
-            className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex items-center gap-4 hover:border-rose-300 hover:shadow-md transition group cursor-pointer"
-          >
-
-            {/* Product Thumb */}
-            <div className="w-20 h-20 bg-stone-100 rounded-lg overflow-hidden shrink-0 relative">
-              <img
-                src={product.photoUrl}
-                alt={product.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://picsum.photos/200';
-                }}
-              />
-            </div>
-
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-start">
-                <h3 className="font-bold text-stone-800 truncate text-lg">{product.name}</h3>
-                <span className="font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg text-sm whitespace-nowrap">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
-                </span>
-              </div>
-
-              <p className="text-sm text-stone-500 line-clamp-2 mt-1">{product.description}</p>
-
-              {/* Dimensions/Details Tags */}
-              <div className="flex flex-wrap gap-2 mt-2">
-                {product.weight && (
-                  <span className="text-xs text-stone-400 bg-stone-50 px-2 py-0.5 rounded flex items-center gap-1">
-                    <Package size={10} /> {product.weight}
-                  </span>
-                )}
-                {product.pdfLink && (
-                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded flex items-center gap-1">
-                    <FileText size={10} /> PDF
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2 pl-2 border-l border-stone-100 ml-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleOpenModal(product);
-                }}
-                className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition"
-                title="Editar"
-              >
-                <Edit2 size={18} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(product.id);
-                }}
-                className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"
-                title="Excluir"
-              >
-                <Trash2 size={18} />
-              </button>
-            </div>
-          </div>
-        ))}
+      <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider border-b border-stone-200">
+                <th className="p-4 font-semibold">Produto</th>
+                <th className="p-4 font-semibold">Categoria</th>
+                <th className="p-4 font-semibold">Preço Base</th>
+                <th className="p-4 font-semibold">Dimensões</th>
+                <th className="p-4 font-semibold">Receita</th>
+                <th className="p-4 font-semibold text-right">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {filteredAndSortedProducts.map(product => (
+                <tr
+                  key={product.id}
+                  onClick={() => setViewingProduct(product)}
+                  className="hover:bg-stone-50 transition cursor-pointer group"
+                >
+                  <td className="p-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-stone-100 rounded-lg overflow-hidden shrink-0 border border-stone-200">
+                        <img
+                          src={product.photoUrl}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://picsum.photos/200';
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <div className="font-bold text-stone-800 flex items-center gap-2">
+                          {product.name}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    {product.category ? (
+                      <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded border border-stone-200">
+                        {product.category}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-stone-400">-</span>
+                    )}
+                  </td>
+                  <td className="p-4">
+                    <span className="font-bold text-stone-700 bg-stone-100 px-2 py-1 rounded text-sm">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
+                    </span>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex flex-col gap-1 text-xs text-stone-500">
+                      {product.weight && <span className="flex items-center gap-1"><Package size={12} /> {product.weight}</span>}
+                      {(product.height || product.width || product.length) && (
+                        <span>{product.height || '-'} x {product.width || '-'} x {product.length || '-'}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    {product.pdfLink ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded font-medium">
+                        <FileText size={12} /> PDF
+                      </span>
+                    ) : (
+                      <span className="text-xs text-stone-400">-</span>
+                    )}
+                  </td>
+                  <td className="p-4 text-right">
+                    <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => handleOpenModal(product)}
+                        className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        title="Editar"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(product.id)}
+                        className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {filteredAndSortedProducts.length === 0 && (
-          <div className="text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-300">
+          <div className="text-center py-12 text-stone-400">
             <p>Nenhum produto encontrado.</p>
           </div>
         )}
@@ -238,22 +404,61 @@ export const Catalog: React.FC = () => {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6">
               <h3 className="text-xl font-bold mb-4">
                 {editingProduct ? 'Editar Produto' : 'Novo Produto'}
               </h3>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="md:col-span-6">
                     <label className="block text-sm font-medium text-stone-700 mb-1">Nome</label>
                     <input required className="w-full border rounded-lg p-2" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Preço Base (R$)</label>
-                    <input type="number" step="0.01" className="w-full border rounded-lg p-2" value={formData.basePrice} onChange={e => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })} />
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Categoria</label>
+                    <div className="flex gap-2">
+                      <select
+                        className="w-full border rounded-lg p-2 bg-white"
+                        value={formData.categoryId || ''}
+                        onChange={e => {
+                          const selectedCat = availableCategories.find(c => c.id === e.target.value);
+                          setFormData({
+                            ...formData,
+                            categoryId: e.target.value,
+                            category: selectedCat ? selectedCat.name : ''
+                          });
+                        }}
+                      >
+                        <option value="">Selecione...</option>
+                        {availableCategories.map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={handleAddCategory}
+                        className="p-1.5 bg-stone-100 rounded-lg hover:bg-stone-200 text-stone-600 border border-stone-200 shrink-0"
+                        title="Nova Categoria"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Preço Base</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 font-medium">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full border rounded-lg p-2 pl-10"
+                        value={formData.basePrice}
+                        onChange={e => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -283,15 +488,58 @@ export const Catalog: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">URL da Foto</label>
-                  <div className="flex gap-2">
-                    <input className="w-full border rounded-lg p-2 flex-1" value={formData.photoUrl} onChange={e => setFormData({ ...formData, photoUrl: e.target.value })} placeholder="https://..." />
-                    <div className="w-10 h-10 bg-stone-100 rounded border flex items-center justify-center overflow-hidden shrink-0">
-                      {formData.photoUrl ? (
-                        <img src={formData.photoUrl} alt="Preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <ImageIcon size={16} className="text-stone-400" />
-                      )}
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Foto do Produto</label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input
+                        className="w-full border rounded-lg p-2 flex-1"
+                        value={formData.photoUrl}
+                        onChange={e => setFormData({ ...formData, photoUrl: e.target.value })}
+                        placeholder="https://..."
+                      />
+                      <div className="w-10 h-10 bg-stone-100 rounded border flex items-center justify-center overflow-hidden shrink-0">
+                        {formData.photoUrl ? (
+                          <img src={formData.photoUrl} alt="Preview" className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon size={16} className="text-stone-400" />
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+
+                          const btn = document.getElementById('upload-btn-text');
+                          if (btn) btn.innerText = 'Enviando...';
+
+                          try {
+                            const url = await uploadToCloudinary(file);
+                            setFormData(prev => ({ ...prev, photoUrl: url }));
+                          } catch (error) {
+                            console.error("Error uploading image:", error);
+                            alert("Erro ao fazer upload da imagem.");
+                          } finally {
+                            if (btn) btn.innerText = 'Fazer Upload';
+                            // Reset input
+                            e.target.value = '';
+                          }
+                        }}
+                        className="hidden"
+                        id="image-upload"
+                      />
+                      <label
+                        htmlFor="image-upload"
+                        className="flex items-center gap-2 px-3 py-2 bg-stone-100 text-stone-600 rounded-lg cursor-pointer hover:bg-stone-200 transition text-sm"
+                      >
+                        <ImageIcon size={16} />
+                        <span id="upload-btn-text">Fazer Upload</span>
+                      </label>
+                      <span className="text-xs text-stone-400">ou cole o link acima</span>
                     </div>
                   </div>
                 </div>
@@ -337,8 +585,8 @@ export const Catalog: React.FC = () => {
 
       {/* View Product Details Modal */}
       {viewingProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto relative">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setViewingProduct(null)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setViewingProduct(null)}
               className="absolute top-4 right-4 p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition z-10"
@@ -357,8 +605,8 @@ export const Catalog: React.FC = () => {
                     (e.target as HTMLImageElement).src = 'https://picsum.photos/400/300';
                   }}
                 />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-6 pt-20">
-                  <h2 className="text-3xl font-bold text-white shadow-sm">{viewingProduct.name}</h2>
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4 pt-16">
+                  <h2 className="text-xl font-bold text-white shadow-sm">{viewingProduct.name}</h2>
                 </div>
               </div>
 
@@ -366,31 +614,72 @@ export const Catalog: React.FC = () => {
                 {/* Price and Basic Info */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <span className="text-3xl font-bold text-rose-600">
+                    <span className="text-xl font-bold text-rose-600 block">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingProduct.basePrice)}
                     </span>
-                    <p className="text-stone-500 mt-1">Preço Base Sugerido</p>
+                    <p className="text-stone-500 mt-1 text-xs">Preço Base Sugerido</p>
                   </div>
 
-                  {viewingProduct.pdfLink && (
-                    <a
-                      href={viewingProduct.pdfLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition font-medium"
-                    >
-                      <FileText size={18} />
-                      Abrir PDF
-                      <ExternalLink size={14} />
-                    </a>
-                  )}
+                  <div className="flex flex-col items-end gap-2">
+                    {viewingProduct.pdfLink && (
+                      <a
+                        href={viewingProduct.pdfLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition font-medium"
+                      >
+                        <FileText size={18} />
+                        Abrir PDF
+                        <ExternalLink size={14} />
+                      </a>
+                    )}
+                    {viewingProduct.category && (
+                      <span className="inline-block text-xs font-medium text-stone-500 bg-stone-100 px-2 py-1 rounded border border-stone-200">
+                        {viewingProduct.category}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Description */}
+                {/* Description */}
                 {viewingProduct.description && (
-                  <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
-                    <h3 className="font-semibold text-stone-800 mb-2">Descrição</h3>
-                    <p className="text-stone-600 leading-relaxed whitespace-pre-wrap">{viewingProduct.description}</p>
+                  <div className="border border-stone-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => {
+                        const el = document.getElementById('desc-content');
+                        const icon = document.getElementById('desc-icon');
+                        if (el && icon) {
+                          el.classList.toggle('hidden');
+                          icon.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+                        }
+                      }}
+                      className="w-full flex items-center justify-between p-4 bg-stone-50 hover:bg-stone-100 transition text-left"
+                    >
+                      <h3 className="font-semibold text-stone-800">Descrição</h3>
+                      <svg
+                        id="desc-icon"
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="transition-transform duration-200"
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <div id="desc-content" className="hidden p-4 bg-white border-t border-stone-200">
+                      <ExpandableText
+                        text={viewingProduct.description}
+                        maxLength={999999}
+                        className="text-sm text-stone-600 leading-relaxed"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -421,8 +710,12 @@ export const Catalog: React.FC = () => {
                       <FileText size={18} className="text-rose-500" />
                       Receita Escrita
                     </h3>
-                    <div className="bg-stone-900 text-stone-100 p-4 rounded-xl font-mono text-sm overflow-x-auto whitespace-pre-wrap leading-relaxed shadow-inner">
-                      {viewingProduct.recipeText}
+                    <div className="bg-stone-900 p-4 rounded-xl shadow-inner overflow-x-auto">
+                      <ExpandableText
+                        text={viewingProduct.recipeText}
+                        className="text-stone-100 font-mono text-sm whitespace-pre-wrap leading-relaxed"
+                        buttonClassName="text-rose-400 text-sm font-medium mt-2 hover:underline focus:outline-none"
+                      />
                     </div>
                   </div>
                 )}

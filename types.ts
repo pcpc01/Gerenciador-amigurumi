@@ -1,3 +1,8 @@
+export interface Category {
+  id: string;
+  name: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -11,6 +16,8 @@ export interface Product {
   pdfLink: string;
   recipeText: string;
   createdAt?: number;
+  category?: string; // Nome da categoria (para exibição)
+  categoryId?: string; // ID da categoria (relação)
 }
 
 export interface Client {
@@ -37,9 +44,11 @@ export interface Order {
   progressNotes: string; // Persisted progress specific to this order
   currentStep: number; // Optional numeric step tracking
   orderSource: string; // Added here (Forma de encomenda)
+  paymentStatus: 'pending' | 'paid' | 'deposit'; // Status do pagamento
+  depositValue?: number; // Valor do sinal
 }
 
-export type ViewState = 'dashboard' | 'catalog' | 'orders' | 'calculator' | 'production_mode' | 'clients';
+export type ViewState = 'dashboard' | 'catalog' | 'orders' | 'calculator' | 'production_mode' | 'clients' | 'analysis';
 
 export interface PricingResult {
   nuvemshop: number;

@@ -2,3 +2,74 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Markdown Styles */
+.markdown-content {
+  line-height: 1.5;
+  color: #44403c;
+  /* stone-700 */
+}
+
+/* Reset margins for all children first to avoid unexpected spacing */
+.markdown-content * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.markdown-content strong {
+  font-weight: 700;
+  color: #1c1917;
+  /* stone-900 */
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+  padding-left: 1.25rem;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+  padding-left: 1.25rem;
+  margin-top: 0.25rem !important;
+  margin-bottom: 0.5rem !important;
+}
+
+.markdown-content li {
+  margin-bottom: 0.125rem !important;
+  padding-left: 0.25rem;
+  line-height: 1.4;
+  /* Slightly tighter line height for list items */
+}
+
+/* Ensure paragraphs inside lists don't add extra margin */
+.markdown-content li p {
+  margin: 0 !important;
+  display: inline-block;
+  /* or inline */
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3 {
+  font-weight: 700;
+  margin-top: 1rem !important;
+  margin-bottom: 0.5rem !important;
+  color: #1c1917;
+  /* stone-900 */
+  line-height: 1.2;
+}
+
+.markdown-content p {
+  margin-bottom: 0.5rem !important;
+}
+
+/* Remove margin from the very last element to fit container snugly */
+.markdown-content>*:last-child {
+  margin-bottom: 0 !important;
+}

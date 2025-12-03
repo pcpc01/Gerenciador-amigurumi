@@ -109,6 +109,7 @@ export const ProductionMode: React.FC<Props> = ({ orderId, onBack }) => {
               </div>
               <p className="text-xs text-stone-500 flex items-center gap-1">
                 Produzindo: <span className="font-medium text-rose-600">{product.name}</span>
+                {product.category && <span className="text-[10px] bg-stone-200 text-stone-600 px-1.5 py-0.5 rounded">{product.category}</span>}
               </p>
             </div>
           </div>
@@ -241,7 +242,10 @@ export const ProductionMode: React.FC<Props> = ({ orderId, onBack }) => {
                   <div className="max-w-3xl mx-auto">
                     <div className="flex items-start justify-between mb-8 pb-6 border-b border-stone-100">
                       <div>
-                        <h2 className="text-2xl font-bold text-stone-800 mb-2">{product.name}</h2>
+                        <h2 className="text-2xl font-bold text-stone-800 mb-2 flex items-center gap-2">
+                          {product.name}
+                          {product.category && <span className="text-sm font-normal bg-stone-100 text-stone-500 px-2 py-1 rounded border border-stone-200">{product.category}</span>}
+                        </h2>
                         <div className="flex gap-2">
                           {product.weight && <span className="text-xs bg-stone-100 text-stone-600 px-2 py-1 rounded">Peso: {product.weight}</span>}
                           {product.height && <span className="text-xs bg-stone-100 text-stone-600 px-2 py-1 rounded">Alt: {product.height}</span>}

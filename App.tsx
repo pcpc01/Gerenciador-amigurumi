@@ -6,12 +6,14 @@ import { PricingCalculator } from './components/PricingCalculator';
 import { ProductionMode } from './components/ProductionMode';
 import { Clients } from './components/Clients';
 import { Login } from './components/Login';
+import { Analysis } from './components/Analysis';
 import { ViewState } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 function App() {
   const { user, loading } = useAuth();
+  // Default view is 'orders' as requested
   const [currentView, setCurrentView] = useState<ViewState>('orders');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
@@ -47,6 +49,8 @@ function App() {
         return <Clients />;
       case 'calculator':
         return <PricingCalculator />;
+      case 'analysis':
+        return <Analysis />;
       case 'production_mode':
         if (selectedOrderId) {
           return <ProductionMode orderId={selectedOrderId} onBack={handleBackFromProduction} />;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, List, Calculator, Users, LogOut } from 'lucide-react';
+import { Home, List, Calculator, Users, LogOut, BarChart2 } from 'lucide-react';
 import { ViewState } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -78,6 +78,15 @@ export const Layout: React.FC<Props> = ({ currentView, onChangeView, children })
             >
               <Calculator size={24} />
               <span className="text-[10px] font-medium">Preços</span>
+            </button>
+
+            <button
+              onClick={() => onChangeView('analysis')}
+              className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${currentView === 'analysis' ? 'text-rose-600' : 'text-stone-400 hover:text-stone-600'
+                }`}
+            >
+              <BarChart2 size={24} />
+              <span className="text-[10px] font-medium">Análise</span>
             </button>
           </div>
         </nav>

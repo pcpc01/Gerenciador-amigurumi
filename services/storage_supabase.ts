@@ -1,6 +1,5 @@
-
 import { supabase } from './supabaseClient';
-import { Product, Order, Client } from '../types';
+import { Product, Order, Client, Category } from '../types';
 
 // --- Products ---
 
@@ -31,6 +30,8 @@ export const getProducts = async (): Promise<Product[]> => {
         basePrice: p.base_price,
         pdfLink: p.pdf_link,
         recipeText: p.recipe_text,
+        category: p.category,
+        categoryId: p.category_id,
         createdAt: p.created_at ? new Date(p.created_at).getTime() : undefined,
     }));
 };
@@ -52,6 +53,8 @@ export const saveProduct = async (product: Product): Promise<void> => {
         base_price: product.basePrice,
         pdf_link: product.pdfLink,
         recipe_text: product.recipeText,
+        category: product.category,
+        category_id: product.categoryId || null,
         created_at: product.createdAt ? new Date(product.createdAt).toISOString() : new Date().toISOString(),
     };
 
@@ -109,8 +112,39 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
         basePrice: data.base_price,
         pdfLink: data.pdf_link,
         recipeText: data.recipe_text,
+        category: data.category,
+        categoryId: data.category_id,
         createdAt: data.created_at ? new Date(data.created_at).getTime() : undefined,
     };
+};
+
+// --- Categories ---
+
+export const getCategories = async (): Promise<Category[]> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+    const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching categories:', error);
+        return [];
+    }
+
+    return data || [];
+};
+
+export const saveCategory = async (category: Category): Promise<void> => {
+    if (!supabase) throw new Error('Supabase client not initialized');
+    const { error } = await supabase
+        .from('categories')
+        .upsert(category);
+
+    if (error) {
+        console.error('Error saving category:', error);
+        throw error;
+    }
 };
 
 // --- Clients ---
@@ -197,7 +231,9 @@ export const getOrders = async (): Promise<Order[]> => {
         status: o.status,
         progressNotes: o.progress_notes,
         currentStep: o.current_step,
-        orderSource: o.order_source
+        orderSource: o.order_source,
+        paymentStatus: o.payment_status || 'pending',
+        depositValue: o.deposit_value
     }));
 };
 
@@ -216,6 +252,8 @@ export const saveOrder = async (order: Order): Promise<void> => {
         progress_notes: order.progressNotes,
         current_step: order.currentStep,
         order_source: order.orderSource,
+        payment_status: order.paymentStatus,
+        deposit_value: order.depositValue,
     };
 
     const { error } = await supabase
@@ -268,6 +306,8 @@ export const getOrderById = async (id: string): Promise<Order | undefined> => {
         status: data.status,
         progressNotes: data.progress_notes,
         currentStep: data.current_step,
-        orderSource: data.order_source
+        orderSource: data.order_source,
+        paymentStatus: data.payment_status || 'pending',
+        depositValue: data.deposit_value
     };
 };
