@@ -33,6 +33,9 @@ export const getProducts = async (): Promise<Product[]> => {
         category: p.category,
         categoryId: p.category_id,
         createdAt: p.created_at ? new Date(p.created_at).getTime() : undefined,
+        shopeeLink: p.shopee_link,
+        elo7Link: p.elo7_link,
+        nuvemshopLink: p.nuvemshop_link,
     }));
 };
 
@@ -56,6 +59,9 @@ export const saveProduct = async (product: Product): Promise<void> => {
         category: product.category,
         category_id: product.categoryId || null,
         created_at: product.createdAt ? new Date(product.createdAt).toISOString() : new Date().toISOString(),
+        shopee_link: product.shopeeLink,
+        elo7_link: product.elo7Link,
+        nuvemshop_link: product.nuvemshopLink,
     };
 
     const { error } = await supabase
@@ -115,6 +121,9 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
         category: data.category,
         categoryId: data.category_id,
         createdAt: data.created_at ? new Date(data.created_at).getTime() : undefined,
+        shopeeLink: data.shopee_link,
+        elo7Link: data.elo7_link,
+        nuvemshopLink: data.nuvemshop_link,
     };
 };
 
@@ -233,7 +242,9 @@ export const getOrders = async (): Promise<Order[]> => {
         currentStep: o.current_step,
         orderSource: o.order_source,
         paymentStatus: o.payment_status || 'pending',
-        depositValue: o.deposit_value
+        depositValue: o.deposit_value,
+        notes: o.notes,
+        quantity: o.quantity || 1
     }));
 };
 
@@ -254,6 +265,8 @@ export const saveOrder = async (order: Order): Promise<void> => {
         order_source: order.orderSource,
         payment_status: order.paymentStatus,
         deposit_value: order.depositValue,
+        notes: order.notes,
+        quantity: order.quantity
     };
 
     const { error } = await supabase
@@ -308,6 +321,8 @@ export const getOrderById = async (id: string): Promise<Order | undefined> => {
         currentStep: data.current_step,
         orderSource: data.order_source,
         paymentStatus: data.payment_status || 'pending',
-        depositValue: data.deposit_value
+        depositValue: data.deposit_value,
+        notes: data.notes,
+        quantity: data.quantity || 1
     };
 };

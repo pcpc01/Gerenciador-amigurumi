@@ -18,6 +18,9 @@ export interface Product {
   createdAt?: number;
   category?: string; // Nome da categoria (para exibição)
   categoryId?: string; // ID da categoria (relação)
+  shopeeLink?: string;
+  elo7Link?: string;
+  nuvemshopLink?: string;
 }
 
 export interface Client {
@@ -46,6 +49,8 @@ export interface Order {
   orderSource: string; // Added here (Forma de encomenda)
   paymentStatus: 'pending' | 'paid' | 'deposit'; // Status do pagamento
   depositValue?: number; // Valor do sinal
+  notes?: string; // Observações gerais do pedido
+  quantity: number; // Quantidade de itens do pedido
 }
 
 export type ViewState = 'dashboard' | 'catalog' | 'orders' | 'calculator' | 'production_mode' | 'clients' | 'analysis';

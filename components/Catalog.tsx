@@ -118,7 +118,10 @@ export const Catalog: React.FC = () => {
     weight: '',
     height: '',
     width: '',
-    length: ''
+    length: '',
+    shopeeLink: '',
+    elo7Link: '',
+    nuvemshopLink: ''
   });
 
   useEffect(() => {
@@ -155,7 +158,10 @@ export const Catalog: React.FC = () => {
         weight: '',
         height: '',
         width: '',
-        length: ''
+        length: '',
+        shopeeLink: '',
+        elo7Link: '',
+        nuvemshopLink: ''
       });
     }
     setIsModalOpen(true);
@@ -211,6 +217,9 @@ export const Catalog: React.FC = () => {
       height: formData.height || '',
       width: formData.width || '',
       length: formData.length || '',
+      shopeeLink: formData.shopeeLink || '',
+      elo7Link: formData.elo7Link || '',
+      nuvemshopLink: formData.nuvemshopLink || '',
       createdAt: editingProduct?.createdAt || Date.now()
     };
 
@@ -237,8 +246,38 @@ export const Catalog: React.FC = () => {
       }
     });
 
+  const getCategoryColor = (category: string) => {
+    const colors = [
+      'bg-red-100 text-red-800',
+      'bg-orange-100 text-orange-800',
+      'bg-amber-100 text-amber-800',
+      'bg-yellow-100 text-yellow-800',
+      'bg-lime-100 text-lime-800',
+      'bg-green-100 text-green-800',
+      'bg-emerald-100 text-emerald-800',
+      'bg-teal-100 text-teal-800',
+      'bg-cyan-100 text-cyan-800',
+      'bg-sky-100 text-sky-800',
+      'bg-blue-100 text-blue-800',
+      'bg-indigo-100 text-indigo-800',
+      'bg-violet-100 text-violet-800',
+      'bg-purple-100 text-purple-800',
+      'bg-fuchsia-100 text-fuchsia-800',
+      'bg-pink-100 text-pink-800',
+      'bg-rose-100 text-rose-800',
+    ];
+
+    let hash = 0;
+    for (let i = 0; i < category.length; i++) {
+      hash = category.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
+  };
+
   return (
-    <div className="p-4 max-w-5xl mx-auto pb-24">
+    <div className="p-4 max-w-4xl mx-auto pb-24">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-stone-800">Catálogo de Peças</h2>
@@ -260,16 +299,16 @@ export const Catalog: React.FC = () => {
             placeholder="Buscar por nome..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-stone-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+            className="w-full pl-10 pr-4 py-1.5 border border-stone-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
           />
-          <Search className="absolute left-3 top-2.5 text-stone-400" size={18} />
+          <Search className="absolute left-3 top-2 text-stone-400" size={18} />
         </div>
 
         <div className="relative min-w-[180px]">
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
-            className="appearance-none w-full bg-white border border-stone-300 text-stone-700 py-2 pl-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-sm cursor-pointer"
+            className="appearance-none w-full bg-white border border-stone-300 text-stone-700 py-1.5 pl-4 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-sm cursor-pointer"
           >
             <option value="">Todas Categorias</option>
             {availableCategories.map(cat => (
@@ -288,7 +327,7 @@ export const Catalog: React.FC = () => {
           <select
             value={sortOption}
             onChange={(e) => setSortOption(e.target.value)}
-            className="appearance-none w-full bg-white border border-stone-300 text-stone-700 py-2 pl-9 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-sm cursor-pointer"
+            className="appearance-none w-full bg-white border border-stone-300 text-stone-700 py-1.5 pl-9 pr-8 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 shadow-sm cursor-pointer"
           >
             <option value="name_asc">Nome (A-Z)</option>
             <option value="name_desc">Nome (Z-A)</option>
@@ -301,29 +340,29 @@ export const Catalog: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+      {/* Desktop Table View */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider border-b border-stone-200">
-                <th className="p-4 font-semibold">Produto</th>
-                <th className="p-4 font-semibold">Categoria</th>
-                <th className="p-4 font-semibold">Preço Base</th>
-                <th className="p-4 font-semibold">Dimensões</th>
-                <th className="p-4 font-semibold">Receita</th>
-                <th className="p-4 font-semibold text-right">Ações</th>
+                <th className="px-4 py-2 font-semibold w-[35%]">Produto</th>
+                <th className="px-4 py-2 font-semibold w-[15%]">Dimensões</th>
+                <th className="px-4 py-2 font-semibold w-[10%]">Receita</th>
+                <th className="px-4 py-2 font-semibold w-[25%]">Lojas</th>
+                <th className="px-4 py-2 font-semibold text-right w-[15%]">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-stone-200">
               {filteredAndSortedProducts.map(product => (
                 <tr
                   key={product.id}
                   onClick={() => setViewingProduct(product)}
                   className="hover:bg-stone-50 transition cursor-pointer group"
                 >
-                  <td className="p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-stone-100 rounded-lg overflow-hidden shrink-0 border border-stone-200">
+                  <td className="px-4 py-2 align-middle">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-stone-100 rounded-lg overflow-hidden shrink-0 border border-stone-200">
                         <img
                           src={product.photoUrl}
                           alt={product.name}
@@ -333,59 +372,90 @@ export const Catalog: React.FC = () => {
                           }}
                         />
                       </div>
-                      <div>
-                        <div className="font-bold text-stone-800 flex items-center gap-2">
+                      <div className="flex flex-col justify-center items-start">
+                        {product.category && (
+                          <span className={`text-[10px] font-bold uppercase tracking-wider leading-none mb-1.5 px-1.5 py-0.5 rounded-md ${getCategoryColor(product.category)}`}>
+                            {product.category}
+                          </span>
+                        )}
+                        <div className="font-bold text-stone-800 text-sm leading-none mb-1">
                           {product.name}
                         </div>
+                        <span className="text-xs font-medium text-stone-500 leading-none">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
+                        </span>
                       </div>
                     </div>
                   </td>
-                  <td className="p-4">
-                    {product.category ? (
-                      <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded border border-stone-200">
-                        {product.category}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-stone-400">-</span>
-                    )}
-                  </td>
-                  <td className="p-4">
-                    <span className="font-bold text-stone-700 bg-stone-100 px-2 py-1 rounded text-sm">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex flex-col gap-1 text-xs text-stone-500">
-                      {product.weight && <span className="flex items-center gap-1"><Package size={12} /> {product.weight}</span>}
+                  <td className="px-4 py-2 align-middle">
+                    <div className="flex flex-col gap-0.5 text-xs text-stone-500">
+                      {product.weight && <span className="flex items-center gap-1"><Package size={10} /> {product.weight}</span>}
                       {(product.height || product.width || product.length) && (
                         <span>{product.height || '-'} x {product.width || '-'} x {product.length || '-'}</span>
                       )}
                     </div>
                   </td>
-                  <td className="p-4">
+                  <td className="px-4 py-2 align-middle">
                     {product.pdfLink ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded font-medium">
-                        <FileText size={12} /> PDF
+                      <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-medium">
+                        <FileText size={10} /> PDF
                       </span>
                     ) : (
                       <span className="text-xs text-stone-400">-</span>
                     )}
                   </td>
-                  <td className="p-4 text-right">
-                    <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                  <td className="px-4 py-2 align-middle">
+                    <div className="flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
+                      {product.shopeeLink && (
+                        <a
+                          href={product.shopeeLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100 hover:bg-orange-100 transition"
+                        >
+                          Shopee
+                        </a>
+                      )}
+                      {product.elo7Link && (
+                        <a
+                          href={product.elo7Link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-50 text-yellow-600 border border-yellow-100 hover:bg-yellow-100 transition"
+                        >
+                          Elo7
+                        </a>
+                      )}
+                      {product.nuvemshopLink && (
+                        <a
+                          href={product.nuvemshopLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition"
+                        >
+                          Nuvem
+                        </a>
+                      )}
+                      {!product.shopeeLink && !product.elo7Link && !product.nuvemshopLink && (
+                        <span className="text-xs text-stone-300">-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 align-middle text-right">
+                    <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
                       <button
                         onClick={() => handleOpenModal(product)}
-                        className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                        className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                         title="Editar"
                       >
-                        <Edit2 size={16} />
+                        <Edit2 size={14} />
                       </button>
                       <button
                         onClick={() => handleDelete(product.id)}
-                        className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                        className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                         title="Excluir"
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={14} />
                       </button>
                     </div>
                   </td>
@@ -402,9 +472,95 @@ export const Catalog: React.FC = () => {
         )}
       </div>
 
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-4">
+        {filteredAndSortedProducts.map(product => (
+          <div
+            key={product.id}
+            onClick={() => setViewingProduct(product)}
+            className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 active:bg-stone-50 transition-colors"
+          >
+            <div className="flex gap-3 mb-3">
+              <div className="w-16 h-16 bg-stone-100 rounded-lg overflow-hidden shrink-0 border border-stone-200">
+                <img
+                  src={product.photoUrl}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'https://picsum.photos/200';
+                  }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start">
+                  <h4 className="font-bold text-stone-800 truncate pr-2">{product.name}</h4>
+                  <span className="font-bold text-stone-700 text-sm whitespace-nowrap">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
+                  </span>
+                </div>
+
+                {product.category && (
+                  <span className="inline-block text-xs font-medium text-stone-600 bg-stone-100 px-2 py-0.5 rounded border border-stone-200 mt-1">
+                    {product.category}
+                  </span>
+                )}
+
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {product.weight && (
+                    <span className="text-[10px] text-stone-500 flex items-center gap-1">
+                      <Package size={10} /> {product.weight}
+                    </span>
+                  )}
+                  {product.pdfLink && (
+                    <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-medium flex items-center gap-1">
+                      <FileText size={10} /> PDF
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mt-2" onClick={e => e.stopPropagation()}>
+                  {product.shopeeLink && (
+                    <a href={product.shopeeLink} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100">Shopee</a>
+                  )}
+                  {product.elo7Link && (
+                    <a href={product.elo7Link} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-600 border border-yellow-100">Elo7</a>
+                  )}
+                  {product.nuvemshopLink && (
+                    <a href={product.nuvemshopLink} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">Nuvem</a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => handleOpenModal(product)}
+                className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                title="Editar"
+              >
+                <Edit2 size={18} />
+              </button>
+              <button
+                onClick={() => handleDelete(product.id)}
+                className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                title="Excluir"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {filteredAndSortedProducts.length === 0 && (
+          <div className="text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-stone-200 border-dashed">
+            <p>Nenhum produto encontrado.</p>
+          </div>
+        )}
+      </div>
+
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setIsModalOpen(false)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6">
               <h3 className="text-xl font-bold mb-4">
@@ -545,6 +701,30 @@ export const Catalog: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Links de Venda</label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      className="w-full border rounded-lg p-2 text-sm"
+                      placeholder="Link Shopee"
+                      value={formData.shopeeLink}
+                      onChange={e => setFormData({ ...formData, shopeeLink: e.target.value })}
+                    />
+                    <input
+                      className="w-full border rounded-lg p-2 text-sm"
+                      placeholder="Link Elo7"
+                      value={formData.elo7Link}
+                      onChange={e => setFormData({ ...formData, elo7Link: e.target.value })}
+                    />
+                    <input
+                      className="w-full border rounded-lg p-2 text-sm"
+                      placeholder="Link Nuvemshop"
+                      value={formData.nuvemshopLink}
+                      onChange={e => setFormData({ ...formData, nuvemshopLink: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-stone-700 mb-1">Descrição Curta</label>
                   <textarea rows={2} className="w-full border rounded-lg p-2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
                 </div>
@@ -596,11 +776,11 @@ export const Catalog: React.FC = () => {
 
             <div className="p-0">
               {/* Header Image */}
-              <div className="w-full h-64 bg-stone-100 relative">
+              <div className="w-full bg-stone-100 relative">
                 <img
                   src={viewingProduct.photoUrl}
                   alt={viewingProduct.name}
-                  className="w-full h-full object-cover"
+                  className="w-full h-auto max-h-[60vh] object-contain mx-auto"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = 'https://picsum.photos/400/300';
                   }}

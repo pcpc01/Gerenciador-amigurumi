@@ -102,7 +102,8 @@ export const Clients: React.FC = () => {
         <Search className="absolute left-3 top-2.5 text-stone-400" size={18} />
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
+      {/* Desktop Table View */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -114,7 +115,7 @@ export const Clients: React.FC = () => {
                 <th className="p-4 font-semibold text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100">
+            <tbody className="divide-y divide-stone-200">
               {filteredClients.map(client => (
                 <tr
                   key={client.id}
@@ -188,6 +189,78 @@ export const Clients: React.FC = () => {
 
         {filteredClients.length === 0 && (
           <div className="text-center py-12 text-stone-400">
+            <p>Nenhum cliente encontrado.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-4">
+        {filteredClients.map(client => (
+          <div
+            key={client.id}
+            onClick={() => handleOpenModal(client)}
+            className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 active:bg-stone-50 transition-colors"
+          >
+            <div className="flex justify-between items-start mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-500">
+                  <User size={16} />
+                </div>
+                <h4 className="font-bold text-stone-800">{client.name}</h4>
+              </div>
+            </div>
+
+            <div className="space-y-2 pl-10">
+              {client.whatsapp && (
+                <a
+                  href={`https://wa.me/55${client.whatsapp.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="flex items-center gap-2 text-sm text-stone-600 hover:text-green-600 transition w-fit"
+                >
+                  <Phone size={14} className="text-green-500" />
+                  <span>{client.whatsapp}</span>
+                </a>
+              )}
+
+              {client.address && (
+                <div className="flex items-start gap-2 text-sm text-stone-600">
+                  <MapPin size={14} className="text-stone-400 shrink-0 mt-0.5" />
+                  <span className="line-clamp-2">{client.address}</span>
+                </div>
+              )}
+
+              {client.notes && (
+                <div className="flex items-start gap-2 text-sm text-stone-500 italic bg-stone-50 p-2 rounded-lg border border-stone-100">
+                  <MessageSquare size={14} className="text-stone-400 shrink-0 mt-0.5" />
+                  <span className="line-clamp-2">{client.notes}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-stone-100" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => handleOpenModal(client)}
+                className="p-2 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                title="Editar"
+              >
+                <Edit2 size={18} />
+              </button>
+              <button
+                onClick={() => handleDelete(client.id)}
+                className="p-2 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                title="Excluir"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {filteredClients.length === 0 && (
+          <div className="text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-stone-200 border-dashed">
             <p>Nenhum cliente encontrado.</p>
           </div>
         )}
