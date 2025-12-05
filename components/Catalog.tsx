@@ -276,6 +276,63 @@ export const Catalog: React.FC = () => {
     return colors[index];
   };
 
+  // Taxas padrão (Hardcoded para consistência com a Calculadora)
+  const fees = {
+    nuvemshop: { percent: 4.99, fixed: 0.35 },
+    shopee: { percent: 20, fixed: 4.00 },
+    elo7: { percent: 20, fixed: 6.00 }, // 20% + 6.00 subsidy
+  };
+
+  const getElo7ServiceFee = (grossPrice: number) => {
+    if (grossPrice <= 29.89) return 1.99;
+    if (grossPrice <= 79.89) return 2.49;
+    if (grossPrice <= 149.89) return 2.99;
+    if (grossPrice <= 299.89) return 4.99;
+    return 5.99;
+  };
+
+  const calculateStorePrice = (basePrice: number, store: 'shopee' | 'elo7' | 'nuvemshop') => {
+    if (!basePrice || basePrice <= 0) return 0;
+    const val = basePrice;
+
+    if (store === 'nuvemshop') {
+      return (val + fees.nuvemshop.fixed) / (1 - fees.nuvemshop.percent / 100);
+    }
+
+    if (store === 'shopee') {
+      const shopeeGrossNoCap = (val + fees.shopee.fixed) / (1 - fees.shopee.percent / 100);
+      const shopeeCommission = shopeeGrossNoCap * (fees.shopee.percent / 100);
+      if (shopeeCommission > 105) {
+        return val + 105 + fees.shopee.fixed;
+      } else {
+        return shopeeGrossNoCap;
+      }
+    }
+
+    if (store === 'elo7') {
+      // Elo7 Dynamic Calculation (Reverse)
+      const brackets = [1.99, 2.49, 2.99, 4.99, 5.99];
+      let foundElo7 = 0;
+
+      for (const fee of brackets) {
+        const candidateGross = (val + fees.elo7.fixed + fee) / (1 - fees.elo7.percent / 100);
+        if (getElo7ServiceFee(candidateGross) === fee) {
+          foundElo7 = candidateGross;
+          break;
+        }
+      }
+      if (foundElo7 === 0) {
+        // Recalculate using the fee for the raw estimate, in case of gaps
+        const rawEstimate = (val + fees.elo7.fixed) / (1 - fees.elo7.percent / 100);
+        const estimatedFee = getElo7ServiceFee(rawEstimate);
+        foundElo7 = (val + fees.elo7.fixed + estimatedFee) / (1 - fees.elo7.percent / 100);
+      }
+      return foundElo7;
+    }
+
+    return 0;
+  };
+
   return (
     <div className="p-4 max-w-4xl mx-auto pb-24">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -346,11 +403,12 @@ export const Catalog: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider border-b border-stone-200">
-                <th className="px-4 py-2 font-semibold w-[35%]">Produto</th>
+                <th className="px-4 py-2 font-semibold w-[30%]">Produto</th>
                 <th className="px-4 py-2 font-semibold w-[15%]">Dimensões</th>
-                <th className="px-4 py-2 font-semibold w-[10%]">Receita</th>
+                <th className="px-4 py-2 font-semibold w-[10%]">Preço</th>
                 <th className="px-4 py-2 font-semibold w-[25%]">Lojas</th>
-                <th className="px-4 py-2 font-semibold text-right w-[15%]">Ações</th>
+                <th className="px-4 py-2 font-semibold w-[10%]">Receita</th>
+                <th className="px-4 py-2 font-semibold text-right w-[10%]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
@@ -378,12 +436,9 @@ export const Catalog: React.FC = () => {
                             {product.category}
                           </span>
                         )}
-                        <div className="font-bold text-stone-800 text-sm leading-none mb-1">
+                        <div className="font-bold text-stone-800 text-sm leading-none">
                           {product.name}
                         </div>
-                        <span className="text-xs font-medium text-stone-500 leading-none">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
-                        </span>
                       </div>
                     </div>
                   </td>
@@ -396,6 +451,63 @@ export const Catalog: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-4 py-2 align-middle">
+                    <span className="text-sm font-bold text-stone-800">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 align-middle">
+                    <div className="flex flex-wrap gap-3" onClick={e => e.stopPropagation()}>
+                      {product.shopeeLink && (
+                        <div className="flex flex-col items-center gap-1">
+                          <a
+                            href={product.shopeeLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100 hover:bg-orange-100 transition"
+                          >
+                            Shopee
+                          </a>
+                          <span className="text-[10px] text-orange-600 font-medium">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateStorePrice(product.basePrice, 'shopee'))}
+                          </span>
+                        </div>
+                      )}
+                      {product.elo7Link && (
+                        <div className="flex flex-col items-center gap-1">
+                          <a
+                            href={product.elo7Link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-50 text-yellow-600 border border-yellow-100 hover:bg-yellow-100 transition"
+                          >
+                            Elo7
+                          </a>
+                          <span className="text-[10px] text-yellow-600 font-medium">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateStorePrice(product.basePrice, 'elo7'))}
+                          </span>
+                        </div>
+                      )}
+                      {product.nuvemshopLink && (
+                        <div className="flex flex-col items-center gap-1">
+                          <a
+                            href={product.nuvemshopLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition"
+                          >
+                            Nuvem
+                          </a>
+                          <span className="text-[10px] text-indigo-600 font-medium">
+                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateStorePrice(product.basePrice, 'nuvemshop'))}
+                          </span>
+                        </div>
+                      )}
+                      {!product.shopeeLink && !product.elo7Link && !product.nuvemshopLink && (
+                        <span className="text-xs text-stone-300">-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 align-middle">
                     {product.pdfLink ? (
                       <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded font-medium">
                         <FileText size={10} /> PDF
@@ -403,43 +515,6 @@ export const Catalog: React.FC = () => {
                     ) : (
                       <span className="text-xs text-stone-400">-</span>
                     )}
-                  </td>
-                  <td className="px-4 py-2 align-middle">
-                    <div className="flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
-                      {product.shopeeLink && (
-                        <a
-                          href={product.shopeeLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] font-bold px-2 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100 hover:bg-orange-100 transition"
-                        >
-                          Shopee
-                        </a>
-                      )}
-                      {product.elo7Link && (
-                        <a
-                          href={product.elo7Link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] font-bold px-2 py-0.5 rounded bg-yellow-50 text-yellow-600 border border-yellow-100 hover:bg-yellow-100 transition"
-                        >
-                          Elo7
-                        </a>
-                      )}
-                      {product.nuvemshopLink && (
-                        <a
-                          href={product.nuvemshopLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100 hover:bg-indigo-100 transition"
-                        >
-                          Nuvem
-                        </a>
-                      )}
-                      {!product.shopeeLink && !product.elo7Link && !product.nuvemshopLink && (
-                        <span className="text-xs text-stone-300">-</span>
-                      )}
-                    </div>
                   </td>
                   <td className="px-4 py-2 align-middle text-right">
                     <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
@@ -518,15 +593,30 @@ export const Catalog: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex flex-wrap gap-1.5 mt-2" onClick={e => e.stopPropagation()}>
+                <div className="flex flex-wrap gap-3" onClick={e => e.stopPropagation()}>
                   {product.shopeeLink && (
-                    <a href={product.shopeeLink} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100">Shopee</a>
+                    <div className="flex flex-col items-center gap-1">
+                      <a href={product.shopeeLink} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 border border-orange-100">Shopee</a>
+                      <span className="text-[10px] text-orange-600 font-medium">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateStorePrice(product.basePrice, 'shopee'))}
+                      </span>
+                    </div>
                   )}
                   {product.elo7Link && (
-                    <a href={product.elo7Link} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-600 border border-yellow-100">Elo7</a>
+                    <div className="flex flex-col items-center gap-1">
+                      <a href={product.elo7Link} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-50 text-yellow-600 border border-yellow-100">Elo7</a>
+                      <span className="text-[10px] text-yellow-600 font-medium">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateStorePrice(product.basePrice, 'elo7'))}
+                      </span>
+                    </div>
                   )}
                   {product.nuvemshopLink && (
-                    <a href={product.nuvemshopLink} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">Nuvem</a>
+                    <div className="flex flex-col items-center gap-1">
+                      <a href={product.nuvemshopLink} target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">Nuvem</a>
+                      <span className="text-[10px] text-indigo-600 font-medium">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateStorePrice(product.basePrice, 'nuvemshop'))}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>

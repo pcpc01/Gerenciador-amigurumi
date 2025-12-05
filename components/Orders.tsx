@@ -519,7 +519,7 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
                           {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.finalPrice)}
                         </span>
 
-                        {order.depositValue && (
+                        {order.depositValue && order.status !== 'delivered' && (
                           <span className="text-[10px] text-rose-600 font-medium whitespace-nowrap mt-0.5">
                             Sinal: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.depositValue)}
                           </span>
