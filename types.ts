@@ -7,6 +7,7 @@ export interface Product {
   id: string;
   name: string;
   photoUrl: string;
+  additionalImages?: string[];
   description: string;
   weight: string;
   height: string;
@@ -21,6 +22,7 @@ export interface Product {
   shopeeLink?: string;
   elo7Link?: string;
   nuvemshopLink?: string;
+  showInCatalog?: boolean;
 }
 
 export interface Client {

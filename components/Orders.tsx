@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Calendar, ChevronRight, ChevronDown, Image as ImageIcon, FileText, Package, UserPlus, MapPin, MessageSquare, Megaphone, Filter, Edit, Trash2, X, User, Phone } from 'lucide-react';
+import { Plus, Search, Calendar, ChevronRight, ChevronDown, Image as ImageIcon, FileText, Package, UserPlus, MapPin, MessageSquare, Megaphone, Filter, Edit, Trash2, X, User, Phone, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Order, Product, Client } from '../types';
 import * as storage from '../services/storage_supabase';
 import { uploadToImgBB } from '../services/imgbb';
@@ -92,6 +94,10 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
     notes: ''
   });
 
+  // PDF Generation State
+  const [isPdfFilterModalOpen, setIsPdfFilterModalOpen] = useState(false);
+  const [pdfSelectedStatuses, setPdfSelectedStatuses] = useState<string[]>(['pending', 'in_progress', 'done', 'delivered', 'cancelled']);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -172,6 +178,82 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
     await storage.saveOrder(updatedOrder);
     loadData();
     setPaymentMenuOpenId(null);
+  };
+
+  const handleOpenPdfModal = () => {
+    setIsPdfFilterModalOpen(true);
+  };
+
+  const handleGeneratePDF = () => {
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFillColor(225, 29, 72); // Rose-600
+    doc.rect(0, 0, 210, 40, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text('Lista de Encomendas', 14, 20);
+    doc.setFontSize(12);
+    doc.text('Patty Crochê', 14, 28);
+
+    // Info
+    doc.setTextColor(100);
+    doc.setFontSize(10);
+    const date = new Date().toLocaleDateString('pt-BR');
+    doc.text(`Gerado em: ${date}`, 14, 48);
+
+    // Filter to show relevant orders (usually open ones, but lets dump all visible or just open?)
+    // User request "baixar as encomendas" implies all active ones probably?
+    // Let's print ALL orders sorted by date to be comprehensive, or maybe just Open ones?
+    // "Baixar as encomendas" usually implies a report. Let's do ALL currently loaded orders.
+
+    // Filter orders based on selected statuses
+    const filteredOrders = orders.filter(order => pdfSelectedStatuses.includes(order.status));
+
+    const tableBody = filteredOrders.map(order => {
+      const product = getProductDetails(order.productId);
+      return [
+        order.clientName,
+        product?.name || '?',
+        new Date(order.deliveryDate).toLocaleDateString('pt-BR'),
+        getStatusLabel(order.status),
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.finalPrice),
+        getPaymentStatusLabel(order.paymentStatus)
+      ];
+    });
+
+    // Table
+    autoTable(doc, {
+      startY: 55,
+      head: [['Cliente', 'Produto', 'Entrega', 'Status', 'Valor', 'Pagamento']],
+      body: tableBody,
+      headStyles: {
+        fillColor: [225, 29, 72],
+        textColor: 255,
+        fontSize: 10,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      }
+    });
+
+    // Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(`Página ${i} de ${pageCount}`, 196, 285, { align: 'right' });
+    }
+
+    doc.save('encomendas-patty-croche.pdf');
+    setIsPdfFilterModalOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -762,6 +844,14 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenPdfModal}
+            className="bg-stone-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-stone-900 transition shadow-sm"
+            title="Baixar Lista de Encomendas em PDF"
+          >
+            <Download size={18} />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
           <button
             onClick={() => {
               resetForm();
@@ -1559,6 +1649,56 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
 
         )
       }
+
+      {/* PDF Filter Modal */}
+      {isPdfFilterModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <h3 className="text-xl font-bold mb-4">Filtrar Relatório PDF</h3>
+              <p className="text-stone-500 text-sm mb-4">Selecione quais status deseja incluir no relatório:</p>
+
+              <div className="space-y-3 mb-6">
+                {['pending', 'in_progress', 'done', 'delivered', 'cancelled'].map(status => (
+                  <label key={status} className="flex items-center gap-3 p-3 bg-stone-50 rounded-lg border border-stone-200 cursor-pointer hover:bg-stone-100 transition">
+                    <input
+                      type="checkbox"
+                      checked={pdfSelectedStatuses.includes(status)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setPdfSelectedStatuses(prev => [...prev, status]);
+                        } else {
+                          setPdfSelectedStatuses(prev => prev.filter(s => s !== status));
+                        }
+                      }}
+                      className="w-5 h-5 text-rose-600 rounded focus:ring-rose-500 border-stone-300"
+                    />
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
+                      <span className="text-sm font-medium text-stone-700">{getStatusLabel(status)}</span>
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsPdfFilterModalOpen(false)}
+                  className="flex-1 px-4 py-2 text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleGeneratePDF}
+                  className="flex-1 px-4 py-2 bg-stone-800 text-white hover:bg-stone-900 rounded-lg transition font-medium"
+                >
+                  Gerar PDF
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

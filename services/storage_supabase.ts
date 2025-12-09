@@ -22,6 +22,7 @@ export const getProducts = async (): Promise<Product[]> => {
         id: p.id,
         name: p.name,
         photoUrl: p.photo_url,
+        additionalImages: p.additional_images || [],
         description: p.description,
         weight: p.weight,
         height: p.height,
@@ -36,6 +37,7 @@ export const getProducts = async (): Promise<Product[]> => {
         shopeeLink: p.shopee_link,
         elo7Link: p.elo7_link,
         nuvemshopLink: p.nuvemshop_link,
+        showInCatalog: p.show_in_catalog !== false, // Default to true if null/undefined
     }));
 };
 
@@ -48,6 +50,7 @@ export const saveProduct = async (product: Product): Promise<void> => {
         id: product.id,
         name: product.name,
         photo_url: product.photoUrl,
+        additional_images: product.additionalImages || [],
         description: product.description,
         weight: product.weight,
         height: product.height,
@@ -62,6 +65,7 @@ export const saveProduct = async (product: Product): Promise<void> => {
         shopee_link: product.shopeeLink,
         elo7_link: product.elo7Link,
         nuvemshop_link: product.nuvemshopLink,
+        show_in_catalog: product.showInCatalog,
     };
 
     const { error } = await supabase
@@ -110,6 +114,7 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
         id: data.id,
         name: data.name,
         photoUrl: data.photo_url,
+        additionalImages: data.additional_images || [],
         description: data.description,
         weight: data.weight,
         height: data.height,
@@ -124,6 +129,7 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
         shopeeLink: data.shopee_link,
         elo7Link: data.elo7_link,
         nuvemshopLink: data.nuvemshop_link,
+        showInCatalog: data.show_in_catalog !== false,
     };
 };
 

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, FileText, Image as ImageIcon, Package, ArrowUpDown, X, ExternalLink } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, FileText, Image as ImageIcon, Package, ArrowUpDown, X, ExternalLink, Eye, EyeOff, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Product, Category } from '../types';
 import * as storage from '../services/storage_supabase';
 import { uploadToCloudinary } from '../services/cloudinary';
@@ -104,6 +106,7 @@ export const Catalog: React.FC = () => {
   const [sortOption, setSortOption] = useState('name_asc');
   const [filterCategory, setFilterCategory] = useState('');
   const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  const [activeProductImage, setActiveProductImage] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -112,6 +115,7 @@ export const Catalog: React.FC = () => {
     category: '',
     basePrice: 0,
     photoUrl: '',
+    additionalImages: [],
     description: '',
     recipeText: '',
     pdfLink: '',
@@ -121,12 +125,20 @@ export const Catalog: React.FC = () => {
     length: '',
     shopeeLink: '',
     elo7Link: '',
-    nuvemshopLink: ''
+
+    nuvemshopLink: '',
+    showInCatalog: true
   });
 
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (viewingProduct) {
+      setActiveProductImage(viewingProduct.photoUrl);
+    }
+  }, [viewingProduct]);
 
   const loadData = async () => {
     const [prods, cats] = await Promise.all([
@@ -152,6 +164,7 @@ export const Catalog: React.FC = () => {
         category: '',
         basePrice: 0,
         photoUrl: '',
+        additionalImages: [],
         description: '',
         recipeText: '',
         pdfLink: '',
@@ -161,7 +174,9 @@ export const Catalog: React.FC = () => {
         length: '',
         shopeeLink: '',
         elo7Link: '',
-        nuvemshopLink: ''
+
+        nuvemshopLink: '',
+        showInCatalog: true
       });
     }
     setIsModalOpen(true);
@@ -210,6 +225,7 @@ export const Catalog: React.FC = () => {
       category: formData.category || '',
       basePrice: Number(formData.basePrice) || 0,
       photoUrl: formData.photoUrl || 'https://picsum.photos/200',
+      additionalImages: (formData.additionalImages || []).filter(Boolean),
       description: formData.description || '',
       recipeText: formData.recipeText || '',
       pdfLink: formData.pdfLink || '',
@@ -220,12 +236,28 @@ export const Catalog: React.FC = () => {
       shopeeLink: formData.shopeeLink || '',
       elo7Link: formData.elo7Link || '',
       nuvemshopLink: formData.nuvemshopLink || '',
+      showInCatalog: formData.showInCatalog !== false,
       createdAt: editingProduct?.createdAt || Date.now()
     };
 
     await storage.saveProduct(productToSave);
     setIsModalOpen(false);
     loadProducts();
+  };
+
+  const handleToggleVisibility = async (e: React.MouseEvent, product: Product) => {
+    e.stopPropagation();
+    try {
+      const updatedProduct = { ...product, showInCatalog: !product.showInCatalog };
+      // Optimistic updatish - just save and reload
+      await storage.saveProduct(updatedProduct);
+
+      // Update local state immediately to feel responsive
+      setProducts(prev => prev.map(p => p.id === product.id ? updatedProduct : p));
+    } catch (error) {
+      console.error('Error toggling visibility:', error);
+      alert('Erro ao atualizar visibilidade.');
+    }
   };
 
   const filteredAndSortedProducts = products
@@ -245,6 +277,70 @@ export const Catalog: React.FC = () => {
           return 0;
       }
     });
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFillColor(225, 29, 72); // Rose-600
+    doc.rect(0, 0, 210, 40, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text('Catálogo de Peças', 14, 20);
+    doc.setFontSize(12);
+    doc.text('Patty Crochê', 14, 28);
+
+    // Info
+    doc.setTextColor(100);
+    doc.setFontSize(10);
+    const date = new Date().toLocaleDateString('pt-BR');
+    doc.text(`Gerado em: ${date}`, 14, 48);
+
+    // Table Data
+    const tableBody = filteredAndSortedProducts.map(product => [
+      product.name,
+      product.category || '-',
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice),
+      product.weight ? `${product.weight}` : '-',
+      product.height ? `${product.height} x ${product.width || '-'} x ${product.length || '-'}` : '-'
+    ]);
+
+    // Table
+    autoTable(doc, {
+      startY: 55,
+      head: [['Produto', 'Categoria', 'Preço', 'Peso', 'Dimensões (AxLxC)']],
+      body: tableBody,
+      headStyles: {
+        fillColor: [225, 29, 72],
+        textColor: 255,
+        fontSize: 10,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        2: { halign: 'right' } // Price aligned right
+      }
+    });
+
+    // Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(`Página ${i} de ${pageCount}`, 196, 285, { align: 'right' });
+    }
+
+    doc.save('catalogo-patty-croche.pdf');
+  };
 
   const getCategoryColor = (category: string) => {
     const colors = [
@@ -340,13 +436,23 @@ export const Catalog: React.FC = () => {
           <h2 className="text-2xl font-bold text-stone-800">Catálogo de Peças</h2>
           <p className="text-stone-500 text-sm">Gerencie suas receitas e produtos base</p>
         </div>
-        <button
-          onClick={() => handleOpenModal()}
-          className="bg-rose-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-rose-700 transition shadow-sm"
-        >
-          <Plus size={18} />
-          Novo Produto
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportPDF}
+            className="bg-stone-800 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-stone-900 transition shadow-sm"
+            title="Baixar Catálogo em PDF"
+          >
+            <Download size={18} />
+            <span className="hidden sm:inline">PDF</span>
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-rose-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-rose-700 transition shadow-sm"
+          >
+            <Plus size={18} />
+            Novo Produto
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-3 mb-6">
@@ -403,12 +509,13 @@ export const Catalog: React.FC = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider border-b border-stone-200">
-                <th className="px-4 py-2 font-semibold w-[30%]">Produto</th>
-                <th className="px-4 py-2 font-semibold w-[15%]">Dimensões</th>
-                <th className="px-4 py-2 font-semibold w-[10%]">Preço</th>
-                <th className="px-4 py-2 font-semibold w-[25%]">Lojas</th>
-                <th className="px-4 py-2 font-semibold w-[10%]">Receita</th>
-                <th className="px-4 py-2 font-semibold text-right w-[10%]">Ações</th>
+                <th className="px-4 py-2 font-semibold w-[25%]">Produto</th>
+                <th className="px-4 py-2 font-semibold w-[8%] text-center">Visível</th>
+                <th className="px-4 py-2 font-semibold w-[12%]">Dimensões</th>
+                <th className="px-4 py-2 font-semibold w-[8%]">Preço</th>
+                <th className="px-4 py-2 font-semibold w-[37%]">Lojas</th>
+                <th className="px-4 py-2 font-semibold w-[5%]">Receita</th>
+                <th className="px-4 py-2 font-semibold text-right w-[5%]">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
@@ -442,6 +549,15 @@ export const Catalog: React.FC = () => {
                       </div>
                     </div>
                   </td>
+                  <td className="px-4 py-2 align-middle text-center">
+                    <button
+                      onClick={(e) => handleToggleVisibility(e, product)}
+                      className={`p-1.5 rounded-lg transition ${product.showInCatalog !== false ? 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100' : 'text-stone-400 bg-stone-100 hover:bg-stone-200'}`}
+                      title={product.showInCatalog !== false ? "Visível no Catálogo" : "Oculto no Catálogo"}
+                    >
+                      {product.showInCatalog !== false ? <Eye size={18} /> : <EyeOff size={18} />}
+                    </button>
+                  </td>
                   <td className="px-4 py-2 align-middle">
                     <div className="flex flex-col gap-0.5 text-xs text-stone-500">
                       {product.weight && <span className="flex items-center gap-1"><Package size={10} /> {product.weight}</span>}
@@ -451,12 +567,12 @@ export const Catalog: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-4 py-2 align-middle">
-                    <span className="text-sm font-bold text-stone-800">
+                    <span className="text-xs font-bold text-stone-800">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
                     </span>
                   </td>
                   <td className="px-4 py-2 align-middle">
-                    <div className="flex flex-wrap gap-3" onClick={e => e.stopPropagation()}>
+                    <div className="flex flex-wrap gap-2" onClick={e => e.stopPropagation()}>
                       {product.shopeeLink && (
                         <div className="flex flex-col items-center gap-1">
                           <a
@@ -540,11 +656,13 @@ export const Catalog: React.FC = () => {
           </table>
         </div>
 
-        {filteredAndSortedProducts.length === 0 && (
-          <div className="text-center py-12 text-stone-400">
-            <p>Nenhum produto encontrado.</p>
-          </div>
-        )}
+        {
+          filteredAndSortedProducts.length === 0 && (
+            <div className="text-center py-12 text-stone-400">
+              <p>Nenhum produto encontrado.</p>
+            </div>
+          )
+        }
       </div>
 
       {/* Mobile Card View */}
@@ -649,351 +767,472 @@ export const Catalog: React.FC = () => {
       </div>
 
       {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="p-6">
-              <h3 className="text-xl font-bold mb-4">
-                {editingProduct ? 'Editar Produto' : 'Novo Produto'}
-              </h3>
+      {
+        isModalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="p-6">
+                <h3 className="text-xl font-bold mb-4">
+                  {editingProduct ? 'Editar Produto' : 'Novo Produto'}
+                </h3>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  <div className="md:col-span-6">
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Nome</label>
-                    <input required className="w-full border rounded-lg p-2" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Categoria</label>
-                    <div className="flex gap-2">
-                      <select
-                        className="w-full border rounded-lg p-2 bg-white"
-                        value={formData.categoryId || ''}
-                        onChange={e => {
-                          const selectedCat = availableCategories.find(c => c.id === e.target.value);
-                          setFormData({
-                            ...formData,
-                            categoryId: e.target.value,
-                            category: selectedCat ? selectedCat.name : ''
-                          });
-                        }}
-                      >
-                        <option value="">Selecione...</option>
-                        {availableCategories.map(cat => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={handleAddCategory}
-                        className="p-1.5 bg-stone-100 rounded-lg hover:bg-stone-200 text-stone-600 border border-stone-200 shrink-0"
-                        title="Nova Categoria"
-                      >
-                        <Plus size={16} />
-                      </button>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                    <div className="md:col-span-6">
+                      <label className="block text-sm font-medium text-stone-700 mb-1">Nome</label>
+                      <input required className="w-full border rounded-lg p-2" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                     </div>
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-sm font-medium text-stone-700 mb-1">Preço Base</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 font-medium">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-full border rounded-lg p-2 pl-10"
-                        value={formData.basePrice}
-                        onChange={e => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dimensions Section */}
-                <div className="bg-stone-50 p-3 rounded-lg border border-stone-100">
-                  <h4 className="text-xs font-semibold text-stone-500 uppercase mb-2 flex items-center gap-1">
-                    <Package size={14} /> Dimensões & Peso
-                  </h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-stone-600 mb-1">Peso (g)</label>
-                      <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 150g" value={formData.weight} onChange={e => setFormData({ ...formData, weight: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-stone-600 mb-1">Altura</label>
-                      <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 20cm" value={formData.height} onChange={e => setFormData({ ...formData, height: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-stone-600 mb-1">Largura</label>
-                      <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 10cm" value={formData.width} onChange={e => setFormData({ ...formData, width: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-stone-600 mb-1">Comp.</label>
-                      <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 10cm" value={formData.length} onChange={e => setFormData({ ...formData, length: e.target.value })} />
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Foto do Produto</label>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <input
-                        className="w-full border rounded-lg p-2 flex-1"
-                        value={formData.photoUrl}
-                        onChange={e => setFormData({ ...formData, photoUrl: e.target.value })}
-                        placeholder="https://..."
-                      />
-                      <div className="w-10 h-10 bg-stone-100 rounded border flex items-center justify-center overflow-hidden shrink-0">
-                        {formData.photoUrl ? (
-                          <img src={formData.photoUrl} alt="Preview" className="w-full h-full object-cover" />
-                        ) : (
-                          <ImageIcon size={16} className="text-stone-400" />
-                        )}
+                    <div className="md:col-span-3">
+                      <label className="block text-sm font-medium text-stone-700 mb-1">Categoria</label>
+                      <div className="flex gap-2">
+                        <select
+                          className="w-full border rounded-lg p-2 bg-white"
+                          value={formData.categoryId || ''}
+                          onChange={e => {
+                            const selectedCat = availableCategories.find(c => c.id === e.target.value);
+                            setFormData({
+                              ...formData,
+                              categoryId: e.target.value,
+                              category: selectedCat ? selectedCat.name : ''
+                            });
+                          }}
+                        >
+                          <option value="">Selecione...</option>
+                          {availableCategories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={handleAddCategory}
+                          className="p-1.5 bg-stone-100 rounded-lg hover:bg-stone-200 text-stone-600 border border-stone-200 shrink-0"
+                          title="Nova Categoria"
+                        >
+                          <Plus size={16} />
+                        </button>
                       </div>
                     </div>
+                    <div className="md:col-span-3">
+                      <label className="block text-sm font-medium text-stone-700 mb-1">Preço Base</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 font-medium">R$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full border rounded-lg p-2 pl-10"
+                          value={formData.basePrice}
+                          onChange={e => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+                    <div className="md:col-span-12 flex items-center gap-2 pt-1">
+                      <div className="flex items-center gap-2 p-2 bg-stone-50 rounded-lg border border-stone-200 w-full cursor-pointer hover:bg-stone-100 transition" onClick={() => setFormData({ ...formData, showInCatalog: !formData.showInCatalog })}>
+                        <input
+                          type="checkbox"
+                          checked={formData.showInCatalog !== false}
+                          onChange={(e) => setFormData({ ...formData, showInCatalog: e.target.checked })}
+                          className="w-5 h-5 text-rose-600 rounded focus:ring-rose-500 border-stone-300 pointer-events-none"
+                        />
+                        <span className="text-sm font-medium text-stone-700 flex-1">
+                          Exibir no Catálogo Online
+                          <span className="block text-xs text-stone-500 font-normal">Se marcado, este produto aparecerá no catálogo público para clientes.</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
 
-                    <div className="flex items-center gap-2">
+                  {/* Dimensions Section */}
+                  <div className="bg-stone-50 p-3 rounded-lg border border-stone-100">
+                    <h4 className="text-xs font-semibold text-stone-500 uppercase mb-2 flex items-center gap-1">
+                      <Package size={14} /> Dimensões & Peso
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-stone-600 mb-1">Peso (g)</label>
+                        <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 150g" value={formData.weight} onChange={e => setFormData({ ...formData, weight: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-stone-600 mb-1">Altura</label>
+                        <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 20cm" value={formData.height} onChange={e => setFormData({ ...formData, height: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-stone-600 mb-1">Largura</label>
+                        <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 10cm" value={formData.width} onChange={e => setFormData({ ...formData, width: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-stone-600 mb-1">Comp.</label>
+                        <input className="w-full border rounded-lg p-2 text-sm" placeholder="ex: 10cm" value={formData.length} onChange={e => setFormData({ ...formData, length: e.target.value })} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-2">Fotos do Produto (Máx. 4)</label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {/* Slot 1: Capa Principal */}
+                      <div className="relative aspect-square bg-stone-100 rounded-lg border-2 border-dashed border-stone-300 flex flex-col items-center justify-center overflow-hidden group hover:border-rose-400 transition-colors">
+                        {formData.photoUrl ? (
+                          <>
+                            <img src={formData.photoUrl} alt="Capa" className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                            <button
+                              type="button"
+                              onClick={() => setFormData({ ...formData, photoUrl: '' })}
+                              className="absolute top-1 right-1 bg-white p-1.5 rounded-full text-rose-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-stone-100"
+                              title="Remover Capa"
+                            >
+                              <X size={14} />
+                            </button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] uppercase font-bold text-center py-1">
+                              Capa
+                            </div>
+                          </>
+                        ) : (
+                          <label className="cursor-pointer w-full h-full flex flex-col items-center justify-center text-stone-400 hover:text-rose-600 transition-colors gap-2">
+                            <ImageIcon size={24} />
+                            <span className="text-xs font-medium text-center px-2">Adicionar Capa</span>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  // Simplified loading indication could be added here
+                                  const url = await uploadToCloudinary(file);
+                                  setFormData(prev => ({ ...prev, photoUrl: url }));
+                                } catch (error) {
+                                  alert("Erro ao fazer upload da imagem.");
+                                }
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+
+                      {/* Slots Adicionais 2, 3, 4 */}
+                      {[0, 1, 2].map((idx) => {
+                        const imgUrl = formData.additionalImages?.[idx];
+                        return (
+                          <div key={idx} className="relative aspect-square bg-stone-100 rounded-lg border-2 border-dashed border-stone-300 flex flex-col items-center justify-center overflow-hidden group hover:border-rose-400 transition-colors">
+                            {imgUrl ? (
+                              <>
+                                <img src={imgUrl} alt={`Foto Extra ${idx + 1}`} className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newImages = [...(formData.additionalImages || [])];
+                                    newImages[idx] = ''; // Clear slot, keep index? Or splice?
+                                    // Splice shifts items. That is usually better for "Gallery".
+                                    newImages.splice(idx, 1);
+                                    setFormData({ ...formData, additionalImages: newImages });
+                                  }}
+                                  className="absolute top-1 right-1 bg-white p-1.5 rounded-full text-rose-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity hover:bg-stone-100"
+                                  title="Remover"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : (
+                              <label className="cursor-pointer w-full h-full flex flex-col items-center justify-center text-stone-400 hover:text-rose-600 transition-colors gap-2">
+                                <Plus size={24} />
+                                <span className="text-xs font-medium">Extra {idx + 1}</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    try {
+                                      const url = await uploadToCloudinary(file);
+                                      setFormData(prev => {
+                                        const current = [...(prev.additionalImages || [])];
+                                        // If we are strictly adding to "next available", we push.
+                                        // But if we want to fill specific slots?
+                                        // "Extra 1" is index 0. If current has 0 items, current[0] = url puts it at 0.
+                                        // If current has 0 items and I click "Extra 3" (idx 2)?
+                                        // Then current[2] = url, [undefined, undefined, url].
+                                        // This is acceptable if we filter on save.
+                                        // But visually "Extra 1" should probably be filled first?
+                                        // Let's just allow random filling, it gives user control.
+                                        current[idx] = url;
+                                        return { ...prev, additionalImages: current };
+                                      });
+                                    } catch (error) {
+                                      alert("Erro ao fazer upload da imagem.");
+                                    }
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Input manual de URL como fallback/opção extra */}
+                    <div className="mt-3 flex gap-2">
                       <input
-                        type="file"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-
-                          const btn = document.getElementById('upload-btn-text');
-                          if (btn) btn.innerText = 'Enviando...';
-
-                          try {
-                            const url = await uploadToCloudinary(file);
-                            setFormData(prev => ({ ...prev, photoUrl: url }));
-                          } catch (error) {
-                            console.error("Error uploading image:", error);
-                            alert("Erro ao fazer upload da imagem.");
-                          } finally {
-                            if (btn) btn.innerText = 'Fazer Upload';
-                            // Reset input
-                            e.target.value = '';
-                          }
-                        }}
-                        className="hidden"
-                        id="image-upload"
-                      />
-                      <label
-                        htmlFor="image-upload"
-                        className="flex items-center gap-2 px-3 py-2 bg-stone-100 text-stone-600 rounded-lg cursor-pointer hover:bg-stone-200 transition text-sm"
-                      >
-                        <ImageIcon size={16} />
-                        <span id="upload-btn-text">Fazer Upload</span>
-                      </label>
-                      <span className="text-xs text-stone-400">ou cole o link acima</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Links de Venda</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input
-                      className="w-full border rounded-lg p-2 text-sm"
-                      placeholder="Link Shopee"
-                      value={formData.shopeeLink}
-                      onChange={e => setFormData({ ...formData, shopeeLink: e.target.value })}
-                    />
-                    <input
-                      className="w-full border rounded-lg p-2 text-sm"
-                      placeholder="Link Elo7"
-                      value={formData.elo7Link}
-                      onChange={e => setFormData({ ...formData, elo7Link: e.target.value })}
-                    />
-                    <input
-                      className="w-full border rounded-lg p-2 text-sm"
-                      placeholder="Link Nuvemshop"
-                      value={formData.nuvemshopLink}
-                      onChange={e => setFormData({ ...formData, nuvemshopLink: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Descrição Curta</label>
-                  <textarea rows={2} className="w-full border rounded-lg p-2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-                </div>
-
-                <div className="border-t pt-4 mt-4">
-                  <h4 className="font-semibold text-stone-800 mb-3 flex items-center gap-2">
-                    <FileText size={18} className="text-rose-500" />
-                    Dados da Receita
-                  </h4>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Link PDF (Drive/Dropbox)</label>
-                      <input className="w-full border rounded-lg p-2" value={formData.pdfLink} onChange={e => setFormData({ ...formData, pdfLink: e.target.value })} placeholder="https://" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Receita em Texto (Copie e Cole)</label>
-                      <textarea
-                        rows={8}
-                        className="w-full border rounded-lg p-2 font-mono text-sm"
-                        value={formData.recipeText}
-                        onChange={e => setFormData({ ...formData, recipeText: e.target.value })}
-                        placeholder="R1: 6pb no AM (6)..."
+                        className="flex-1 border rounded-lg p-2 text-xs text-stone-600"
+                        placeholder="Ou cole uma URL de imagem externa para a Capa..."
+                        value={formData.photoUrl || ''}
+                        onChange={e => setFormData({ ...formData, photoUrl: e.target.value })}
                       />
                     </div>
                   </div>
-                </div>
 
-                <div className="flex gap-3 pt-4 mt-2">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 border rounded-lg hover:bg-stone-50">Cancelar</button>
-                  <button type="submit" className="flex-1 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700">Salvar</button>
-                </div>
-              </form>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Links de Venda</label>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        className="w-full border rounded-lg p-2 text-sm"
+                        placeholder="Link Shopee"
+                        value={formData.shopeeLink}
+                        onChange={e => setFormData({ ...formData, shopeeLink: e.target.value })}
+                      />
+                      <input
+                        className="w-full border rounded-lg p-2 text-sm"
+                        placeholder="Link Elo7"
+                        value={formData.elo7Link}
+                        onChange={e => setFormData({ ...formData, elo7Link: e.target.value })}
+                      />
+                      <input
+                        className="w-full border rounded-lg p-2 text-sm"
+                        placeholder="Link Nuvemshop"
+                        value={formData.nuvemshopLink}
+                        onChange={e => setFormData({ ...formData, nuvemshopLink: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Descrição Curta</label>
+                    <textarea rows={2} className="w-full border rounded-lg p-2" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                  </div>
+
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="font-semibold text-stone-800 mb-3 flex items-center gap-2">
+                      <FileText size={18} className="text-rose-500" />
+                      Dados da Receita
+                    </h4>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-stone-700 mb-1">Link PDF (Drive/Dropbox)</label>
+                        <input className="w-full border rounded-lg p-2" value={formData.pdfLink} onChange={e => setFormData({ ...formData, pdfLink: e.target.value })} placeholder="https://" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-stone-700 mb-1">Receita em Texto (Copie e Cole)</label>
+                        <textarea
+                          rows={8}
+                          className="w-full border rounded-lg p-2 font-mono text-sm"
+                          value={formData.recipeText}
+                          onChange={e => setFormData({ ...formData, recipeText: e.target.value })}
+                          placeholder="R1: 6pb no AM (6)..."
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4 mt-2">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-2 border rounded-lg hover:bg-stone-50">Cancelar</button>
+                    <button type="submit" className="flex-1 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700">Salvar</button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* View Product Details Modal */}
-      {viewingProduct && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setViewingProduct(null)}>
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
-            <button
-              onClick={() => setViewingProduct(null)}
-              className="absolute top-4 right-4 p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition z-10"
-            >
-              <X size={20} className="text-stone-600" />
-            </button>
+      {
+        viewingProduct && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setViewingProduct(null)}>
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setViewingProduct(null)}
+                className="absolute top-4 right-4 p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition z-10"
+              >
+                <X size={20} className="text-stone-600" />
+              </button>
 
-            <div className="p-0">
-              {/* Header Image */}
-              <div className="w-full bg-stone-100 relative">
-                <img
-                  src={viewingProduct.photoUrl}
-                  alt={viewingProduct.name}
-                  className="w-full h-auto max-h-[60vh] object-contain mx-auto"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = 'https://picsum.photos/400/300';
-                  }}
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4 pt-16">
-                  <h2 className="text-xl font-bold text-white shadow-sm">{viewingProduct.name}</h2>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                {/* Price and Basic Info */}
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xl font-bold text-rose-600 block">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingProduct.basePrice)}
-                    </span>
-                    <p className="text-stone-500 mt-1 text-xs">Preço Base Sugerido</p>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-2">
-                    {viewingProduct.pdfLink && (
-                      <a
-                        href={viewingProduct.pdfLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition font-medium"
-                      >
-                        <FileText size={18} />
-                        Abrir PDF
-                        <ExternalLink size={14} />
-                      </a>
-                    )}
-                    {viewingProduct.category && (
-                      <span className="inline-block text-xs font-medium text-stone-500 bg-stone-100 px-2 py-1 rounded border border-stone-200">
-                        {viewingProduct.category}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Description */}
-                {/* Description */}
-                {viewingProduct.description && (
-                  <div className="border border-stone-200 rounded-xl overflow-hidden">
-                    <button
-                      onClick={() => {
-                        const el = document.getElementById('desc-content');
-                        const icon = document.getElementById('desc-icon');
-                        if (el && icon) {
-                          el.classList.toggle('hidden');
-                          icon.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-                        }
+              <div className="p-0">
+                {/* Header Image & Gallery */}
+                <div className="w-full bg-stone-100 relative group">
+                  <div className="w-full h-auto max-h-[60vh] min-h-[300px] flex items-center justify-center bg-stone-100 overflow-hidden">
+                    <img
+                      src={activeProductImage || viewingProduct.photoUrl}
+                      alt={viewingProduct.name}
+                      className="max-w-full max-h-[60vh] object-contain shadow-sm"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/400/300';
                       }}
-                      className="w-full flex items-center justify-between p-4 bg-stone-50 hover:bg-stone-100 transition text-left"
-                    >
-                      <h3 className="font-semibold text-stone-800">Descrição</h3>
-                      <svg
-                        id="desc-icon"
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="20"
-                        height="20"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="transition-transform duration-200"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </button>
-                    <div id="desc-content" className="hidden p-4 bg-white border-t border-stone-200">
-                      <ExpandableText
-                        text={viewingProduct.description}
-                        maxLength={999999}
-                        className="text-sm text-stone-600 leading-relaxed"
-                      />
-                    </div>
+                    />
                   </div>
-                )}
 
-                {/* Dimensions */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
-                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Peso</span>
-                    <span className="font-medium text-stone-700">{viewingProduct.weight || '-'}</span>
-                  </div>
-                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
-                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Altura</span>
-                    <span className="font-medium text-stone-700">{viewingProduct.height || '-'}</span>
-                  </div>
-                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
-                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Largura</span>
-                    <span className="font-medium text-stone-700">{viewingProduct.width || '-'}</span>
-                  </div>
-                  <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
-                    <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Comprimento</span>
-                    <span className="font-medium text-stone-700">{viewingProduct.length || '-'}</span>
+                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-20 pointer-events-none">
+                    <div className="pointer-events-auto">
+                      <h2 className="text-2xl font-bold text-white shadow-sm mb-3 drop-shadow-md">{viewingProduct.name}</h2>
+
+                      {/* Gallery Thumbnails */}
+                      {/* Gallery Thumbnails & Actions */}
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {/* Main Photo Thumbnail */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setActiveProductImage(viewingProduct.photoUrl); }}
+                          className={`w-14 h-14 rounded-lg border-2 overflow-hidden shrink-0 transition-all ${activeProductImage === viewingProduct.photoUrl ? 'border-rose-500 ring-2 ring-rose-500/50 scale-105' : 'border-white/30 hover:border-white'}`}
+                        >
+                          <img src={viewingProduct.photoUrl} className="w-full h-full object-cover" alt="Main" />
+                        </button>
+
+                        {/* Additional Images Thumbnails */}
+                        {(viewingProduct.additionalImages || []).map((img, idx) => (
+                          <button
+                            key={idx}
+                            onClick={(e) => { e.stopPropagation(); setActiveProductImage(img); }}
+                            className={`w-14 h-14 rounded-lg border-2 overflow-hidden shrink-0 transition-all ${activeProductImage === img ? 'border-rose-500 ring-2 ring-rose-500/50 scale-105' : 'border-white/30 hover:border-white'}`}
+                          >
+                            <img src={img} className="w-full h-full object-cover" alt={`Extra ${idx}`} />
+                          </button>
+                        ))}
+
+                        {/* Edit Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingProduct(null);
+                            handleOpenModal(viewingProduct);
+                          }}
+                          className="bg-white/20 hover:bg-white/40 text-white w-14 h-14 rounded-lg border-2 border-white/30 hover:border-white backdrop-blur-md transition-all flex flex-col items-center justify-center gap-0.5 shrink-0"
+                          title="Editar Produto"
+                        >
+                          <Edit2 size={18} />
+                          <span className="text-[10px] font-bold">Editar</span>
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Recipe Text */}
-                {viewingProduct.recipeText && (
-                  <div>
-                    <h3 className="font-semibold text-stone-800 mb-3 flex items-center gap-2">
-                      <FileText size={18} className="text-rose-500" />
-                      Receita Escrita
-                    </h3>
-                    <div className="bg-stone-900 p-4 rounded-xl shadow-inner overflow-x-auto">
-                      <ExpandableText
-                        text={viewingProduct.recipeText}
-                        className="text-stone-100 font-mono text-sm whitespace-pre-wrap leading-relaxed"
-                        buttonClassName="text-rose-400 text-sm font-medium mt-2 hover:underline focus:outline-none"
-                      />
+                <div className="p-6 space-y-6">
+                  {/* Price and Basic Info */}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-xl font-bold text-rose-600 block">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(viewingProduct.basePrice)}
+                      </span>
+                      <p className="text-stone-500 mt-1 text-xs">Preço Base Sugerido</p>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2">
+                      {viewingProduct.pdfLink && (
+                        <a
+                          href={viewingProduct.pdfLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition font-medium"
+                        >
+                          <FileText size={18} />
+                          Abrir PDF
+                          <ExternalLink size={14} />
+                        </a>
+                      )}
+                      {viewingProduct.category && (
+                        <span className="inline-block text-xs font-medium text-stone-500 bg-stone-100 px-2 py-1 rounded border border-stone-200">
+                          {viewingProduct.category}
+                        </span>
+                      )}
                     </div>
                   </div>
-                )}
+
+                  {/* Description */}
+                  {/* Description */}
+                  {viewingProduct.description && (
+                    <div className="border border-stone-200 rounded-xl overflow-hidden">
+                      <button
+                        onClick={() => {
+                          const el = document.getElementById('desc-content');
+                          const icon = document.getElementById('desc-icon');
+                          if (el && icon) {
+                            el.classList.toggle('hidden');
+                            icon.style.transform = el.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+                          }
+                        }}
+                        className="w-full flex items-center justify-between p-4 bg-stone-50 hover:bg-stone-100 transition text-left"
+                      >
+                        <h3 className="font-semibold text-stone-800">Descrição</h3>
+                        <svg
+                          id="desc-icon"
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="20"
+                          height="20"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="transition-transform duration-200"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                      <div id="desc-content" className="hidden p-4 bg-white border-t border-stone-200">
+                        <ExpandableText
+                          text={viewingProduct.description}
+                          maxLength={999999}
+                          className="text-sm text-stone-600 leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dimensions */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                      <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Peso</span>
+                      <span className="font-medium text-stone-700">{viewingProduct.weight || '-'}</span>
+                    </div>
+                    <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                      <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Altura</span>
+                      <span className="font-medium text-stone-700">{viewingProduct.height || '-'}</span>
+                    </div>
+                    <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                      <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Largura</span>
+                      <span className="font-medium text-stone-700">{viewingProduct.width || '-'}</span>
+                    </div>
+                    <div className="bg-white border border-stone-200 p-3 rounded-lg text-center">
+                      <span className="block text-xs text-stone-400 uppercase font-bold mb-1">Comprimento</span>
+                      <span className="font-medium text-stone-700">{viewingProduct.length || '-'}</span>
+                    </div>
+                  </div>
+
+                  {/* Recipe Text */}
+                  {viewingProduct.recipeText && (
+                    <div>
+                      <h3 className="font-semibold text-stone-800 mb-3 flex items-center gap-2">
+                        <FileText size={18} className="text-rose-500" />
+                        Receita Escrita
+                      </h3>
+                      <div className="bg-stone-900 p-4 rounded-xl shadow-inner overflow-x-auto">
+                        <ExpandableText
+                          text={viewingProduct.recipeText}
+                          className="text-stone-100 font-mono text-sm whitespace-pre-wrap leading-relaxed"
+                          buttonClassName="text-rose-400 text-sm font-medium mt-2 hover:underline focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
