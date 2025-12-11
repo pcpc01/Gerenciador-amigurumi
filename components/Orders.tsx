@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Calendar, ChevronRight, ChevronDown, Image as ImageIcon, FileText, Package, UserPlus, MapPin, MessageSquare, Megaphone, Filter, Edit, Trash2, X, User, Phone, Download } from 'lucide-react';
+import { Plus, Search, Calendar, ChevronRight, ChevronDown, Image as ImageIcon, FileText, Package, UserPlus, MapPin, MessageSquare, Megaphone, Filter, Edit, Trash2, X, User, Phone, Download, ArrowDownAZ } from 'lucide-react';
+
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Order, Product, Client } from '../types';
@@ -35,6 +36,7 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
   const [isDoneOrdersOpen, setIsDoneOrdersOpen] = useState(false);
   const [isDeliveredOrdersOpen, setIsDeliveredOrdersOpen] = useState(false);
   const [isCancelledOrdersOpen, setIsCancelledOrdersOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'client' | 'product'>('date');
 
   useEffect(() => {
     const handleScroll = () => {
@@ -97,6 +99,14 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
   // PDF Generation State
   const [isPdfFilterModalOpen, setIsPdfFilterModalOpen] = useState(false);
   const [pdfSelectedStatuses, setPdfSelectedStatuses] = useState<string[]>(['pending', 'in_progress', 'done', 'delivered', 'cancelled']);
+
+  // Custom Client Select State
+  const [isClientSelectOpen, setIsClientSelectOpen] = useState(false);
+  const [clientSearchInfo, setClientSearchInfo] = useState('');
+
+  // Custom Product Select State
+  const [isProductSelectOpen, setIsProductSelectOpen] = useState(false);
+  const [productSearchInfo, setProductSearchInfo] = useState('');
 
   useEffect(() => {
     loadData();
@@ -483,10 +493,25 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
     return { text: `Faltam ${diffDays} dias`, color: 'text-stone-600 font-medium' };
   };
 
-  const openOrders = orders.filter(o => ['pending', 'in_progress'].includes(o.status));
-  const doneOrders = orders.filter(o => o.status === 'done');
-  const deliveredOrders = orders.filter(o => o.status === 'delivered');
-  const cancelledOrders = orders.filter(o => o.status === 'cancelled');
+  const sortedOrders = [...orders].sort((a, b) => {
+    if (sortBy === 'date') {
+      return new Date(a.deliveryDate).getTime() - new Date(b.deliveryDate).getTime();
+    }
+    if (sortBy === 'client') {
+      return a.clientName.localeCompare(b.clientName);
+    }
+    if (sortBy === 'product') {
+      const prodA = getProductDetails(a.productId)?.name || '';
+      const prodB = getProductDetails(b.productId)?.name || '';
+      return prodA.localeCompare(prodB);
+    }
+    return 0;
+  });
+
+  const openOrders = sortedOrders.filter(o => ['pending', 'in_progress'].includes(o.status));
+  const doneOrders = sortedOrders.filter(o => o.status === 'done');
+  const deliveredOrders = sortedOrders.filter(o => o.status === 'delivered');
+  const cancelledOrders = sortedOrders.filter(o => o.status === 'cancelled');
 
   const OrderTable = ({ orders, emptyMessage }: { orders: Order[], emptyMessage: string }) => (
     <>
@@ -505,171 +530,226 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-200">
-              {orders.map(order => {
-                const product = getProductDetails(order.productId);
-                const daysInfo = ['delivered', 'cancelled'].includes(order.status)
-                  ? null
-                  : getDaysRemaining(order.deliveryDate);
+              {(() => {
+                let groupCount = 0;
+                let lastKey = '';
 
-                return (
-                  <tr
-                    key={order.id}
-                    onClick={() => setViewingOrder(order)}
-                    className="hover:bg-stone-50 transition cursor-pointer group"
-                  >
-                    <td className="px-4 py-3 align-middle">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-stone-100 rounded-md overflow-hidden shrink-0 border border-stone-200">
-                          {product ? (
-                            <img src={product.photoUrl} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-stone-200" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-stone-800 truncate max-w-[220px]">
-                            <span className="text-rose-600 font-bold mr-1.5 text-xs bg-rose-50 px-1.5 py-0.5 rounded">
-                              {order.quantity || 1}x
-                            </span>
-                            {product?.name || 'Produto desconhecido'}
-                          </div>
-                          <div className="text-xs text-stone-500 truncate flex items-center gap-1 mt-0.5">
-                            <User size={10} />
-                            {order.clientName}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-middle">
-                      <div className="text-xs text-stone-500 max-w-[200px] truncate" title={order.notes}>
-                        {order.notes || '-'}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-middle text-center">
-                      <div className="flex flex-col items-center">
-                        <span className="text-xs text-stone-600 font-medium">{new Date(order.deliveryDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
-                        {daysInfo && (
-                          <span className={`text-[10px] leading-tight ${daysInfo.color}`}>
-                            {daysInfo.text.replace('Faltam ', '').replace(' dias', 'd')}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-middle text-center">
-                      <div className="relative inline-block" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={(e) => {
-                            if (statusMenuOpenId === order.id) {
-                              setStatusMenuOpenId(null);
-                            } else {
-                              const rect = e.currentTarget.getBoundingClientRect();
-                              setStatusMenuPosition({ top: rect.bottom + 4, left: rect.left });
-                              setStatusMenuOpenId(order.id);
-                            }
-                          }}
-                          className={`px-2 py-1 rounded text-[10px] font-medium border ${getStatusColor(order.status)} hover:brightness-95 transition flex items-center gap-1 cursor-pointer shadow-sm whitespace-nowrap`}
-                        >
-                          {getStatusLabel(order.status)}
-                          <ChevronDown size={10} className="opacity-70" />
-                        </button>
+                return orders.map((order, index) => {
+                  const product = getProductDetails(order.productId);
+                  const daysInfo = ['delivered', 'cancelled'].includes(order.status)
+                    ? null
+                    : getDaysRemaining(order.deliveryDate);
 
-                        {statusMenuOpenId === order.id && statusMenuPosition && (
-                          <>
-                            <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpenId(null)} />
-                            <div
-                              className="fixed z-50 bg-white rounded-lg shadow-xl border border-stone-100 overflow-hidden min-w-[140px]"
-                              style={{ top: statusMenuPosition.top, left: statusMenuPosition.left }}
-                            >
-                              {['pending', 'in_progress', 'done', 'delivered', 'cancelled'].map((status) => (
-                                <button
-                                  key={status}
-                                  onClick={() => handleStatusUpdate(order.id, status as any)}
-                                  className={`w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2 transition border-l-2 ${order.status === status ? 'bg-stone-50 font-medium text-rose-600 border-rose-500' : 'text-stone-600 border-transparent'}`}
-                                >
-                                  <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
-                                  {getStatusLabel(status)}
-                                </button>
-                              ))}
+                  // Determine Sort Key for Grouping
+                  let currentKey = order.id; // Default unique
+                  if (sortBy === 'client') currentKey = order.clientName;
+                  else if (sortBy === 'product') currentKey = product?.name || 'unknown';
+                  else if (sortBy === 'date') currentKey = order.deliveryDate;
+
+                  // Update group count if key changes
+                  if (currentKey !== lastKey) {
+                    if (index > 0) groupCount++;
+                    lastKey = currentKey;
+                  }
+
+                  // Determine background color based on group
+                  const isEvenGroup = groupCount % 2 === 0;
+                  // Using a more distinct color for the alternate group
+                  const rowBgClass = isEvenGroup ? 'bg-white' : 'bg-stone-100';
+
+                  const prevOrder = index > 0 ? orders[index - 1] : null;
+                  let showHeader = false;
+                  let headerTitle = '';
+                  let headerIcon = null;
+
+                  if (sortBy === 'client') {
+                    if (!prevOrder || prevOrder.clientName !== order.clientName) {
+                      showHeader = true;
+                      headerTitle = order.clientName;
+                      headerIcon = <User size={14} />;
+                    }
+                  } else if (sortBy === 'product') {
+                    const prodName = product?.name || 'Desconhecido';
+                    const prevProdName = prevOrder ? (getProductDetails(prevOrder.productId)?.name || 'Desconhecido') : '';
+                    if (!prevOrder || prevProdName !== prodName) {
+                      showHeader = true;
+                      headerTitle = prodName;
+                      headerIcon = <Package size={14} />;
+                    }
+                  }
+
+                  return (
+                    <React.Fragment key={order.id}>
+                      {showHeader && (
+                        <tr className="bg-stone-200 border-b border-stone-300">
+                          <td colSpan={6} className="px-4 py-1.5 text-xs font-bold text-stone-700 uppercase tracking-wider">
+                            <div className="flex items-center gap-2">
+                              {headerIcon}
+                              {headerTitle}
                             </div>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-middle text-center">
-                      <div className="flex flex-col items-center justify-center w-full gap-1">
-                        <span className="font-medium text-stone-700 text-sm">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.finalPrice)}
-                        </span>
-
-                        {order.depositValue && order.status !== 'delivered' && (
-                          <span className="text-[10px] text-rose-600 font-medium whitespace-nowrap mt-0.5">
-                            Sinal: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.depositValue)}
-                          </span>
-                        )}
-
-                        <div className="relative inline-block" onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={(e) => {
-                              if (paymentMenuOpenId === order.id) {
-                                setPaymentMenuOpenId(null);
-                              } else {
-                                const rect = e.currentTarget.getBoundingClientRect();
-                                setPaymentMenuPosition({ top: rect.bottom + 4, left: rect.left });
-                                setPaymentMenuOpenId(order.id);
-                              }
-                            }}
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-medium border flex items-center gap-1 hover:brightness-95 transition cursor-pointer whitespace-nowrap ${getPaymentStatusColor(order.paymentStatus)}`}
-                          >
-                            {getPaymentStatusLabel(order.paymentStatus)}
-                            <ChevronDown size={8} className="opacity-70" />
-                          </button>
-
-                          {paymentMenuOpenId === order.id && paymentMenuPosition && (
-                            <>
-                              <div className="fixed inset-0 z-40" onClick={() => setPaymentMenuOpenId(null)} />
-                              <div
-                                className="fixed z-50 bg-white rounded-lg shadow-xl border border-stone-100 overflow-hidden min-w-[120px]"
-                                style={{ top: paymentMenuPosition.top, left: paymentMenuPosition.left }}
-                              >
-                                {['pending', 'deposit', 'paid'].map((status) => (
-                                  <button
-                                    key={status}
-                                    onClick={() => handlePaymentStatusUpdate(order.id, status as any)}
-                                    className={`w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2 transition border-l-2 ${order.paymentStatus === status ? 'bg-stone-50 font-medium text-emerald-600 border-emerald-500' : 'text-stone-600 border-transparent'}`}
-                                  >
-                                    <div className={`w-1.5 h-1.5 rounded-full ${getPaymentStatusColor(status).split(' ')[0]}`} />
-                                    {getPaymentStatusLabel(status)}
-                                  </button>
-                                ))}
+                          </td>
+                        </tr>
+                      )}
+                      <tr
+                        onClick={() => setViewingOrder(order)}
+                        className={`${rowBgClass} hover:bg-rose-50 transition cursor-pointer group`}
+                      >
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-stone-100 rounded-md overflow-hidden shrink-0 border border-stone-200">
+                              {product ? (
+                                <img src={product.photoUrl} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-stone-200" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-stone-800 truncate max-w-[220px]">
+                                <span className="text-rose-600 font-bold mr-1.5 text-xs bg-rose-50 px-1.5 py-0.5 rounded">
+                                  {order.quantity || 1}x
+                                </span>
+                                {product?.name || 'Produto desconhecido'}
                               </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 align-middle text-right">
-                      <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={(e) => handleEditOrder(order, e)}
-                          className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition"
-                          title="Editar"
-                        >
-                          <Edit size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteOrder(order.id, e)}
-                          className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-md transition"
-                          title="Excluir"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                              <div className="text-xs text-stone-500 truncate flex items-center gap-1 mt-0.5">
+                                <User size={10} />
+                                {order.clientName}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="text-xs text-stone-500 max-w-[200px] truncate" title={order.notes}>
+                            {order.notes || '-'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-center">
+                          <div className="flex flex-col items-center">
+                            <span className="text-xs text-stone-600 font-medium">{new Date(order.deliveryDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
+                            {daysInfo && (
+                              <span className={`text-[10px] leading-tight ${daysInfo.color}`}>
+                                {daysInfo.text.replace('Faltam ', '').replace(' dias', 'd')}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-center">
+                          <div className="relative inline-block" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={(e) => {
+                                if (statusMenuOpenId === order.id) {
+                                  setStatusMenuOpenId(null);
+                                } else {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setStatusMenuPosition({ top: rect.bottom + 4, left: rect.left });
+                                  setStatusMenuOpenId(order.id);
+                                }
+                              }}
+                              className={`px-2 py-1 rounded text-[10px] font-medium border ${getStatusColor(order.status)} hover:brightness-95 transition flex items-center gap-1 cursor-pointer shadow-sm whitespace-nowrap`}
+                            >
+                              {getStatusLabel(order.status)}
+                              <ChevronDown size={10} className="opacity-70" />
+                            </button>
+
+                            {statusMenuOpenId === order.id && statusMenuPosition && (
+                              <>
+                                <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpenId(null)} />
+                                <div
+                                  className="fixed z-50 bg-white rounded-lg shadow-xl border border-stone-100 overflow-hidden min-w-[140px]"
+                                  style={{ top: statusMenuPosition.top, left: statusMenuPosition.left }}
+                                >
+                                  {['pending', 'in_progress', 'done', 'delivered', 'cancelled'].map((status) => (
+                                    <button
+                                      key={status}
+                                      onClick={() => handleStatusUpdate(order.id, status as any)}
+                                      className={`w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2 transition border-l-2 ${order.status === status ? 'bg-stone-50 font-medium text-rose-600 border-rose-500' : 'text-stone-600 border-transparent'}`}
+                                    >
+                                      <div className={`w-1.5 h-1.5 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
+                                      {getStatusLabel(status)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-center">
+                          <div className="flex flex-col items-center justify-center w-full gap-1">
+                            <span className="font-medium text-stone-700 text-sm">
+                              {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.finalPrice)}
+                            </span>
+
+                            {order.depositValue && order.status !== 'delivered' && (
+                              <span className="text-[10px] text-rose-600 font-medium whitespace-nowrap mt-0.5">
+                                Sinal: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.depositValue)}
+                              </span>
+                            )}
+
+                            <div className="relative inline-block" onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={(e) => {
+                                  if (paymentMenuOpenId === order.id) {
+                                    setPaymentMenuOpenId(null);
+                                  } else {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setPaymentMenuPosition({ top: rect.bottom + 4, left: rect.left });
+                                    setPaymentMenuOpenId(order.id);
+                                  }
+                                }}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-medium border flex items-center gap-1 hover:brightness-95 transition cursor-pointer whitespace-nowrap ${getPaymentStatusColor(order.paymentStatus)}`}
+                              >
+                                {getPaymentStatusLabel(order.paymentStatus)}
+                                <ChevronDown size={8} className="opacity-70" />
+                              </button>
+
+                              {paymentMenuOpenId === order.id && paymentMenuPosition && (
+                                <>
+                                  <div className="fixed inset-0 z-40" onClick={() => setPaymentMenuOpenId(null)} />
+                                  <div
+                                    className="fixed z-50 bg-white rounded-lg shadow-xl border border-stone-100 overflow-hidden min-w-[120px]"
+                                    style={{ top: paymentMenuPosition.top, left: paymentMenuPosition.left }}
+                                  >
+                                    {['pending', 'deposit', 'paid'].map((status) => (
+                                      <button
+                                        key={status}
+                                        onClick={() => handlePaymentStatusUpdate(order.id, status as any)}
+                                        className={`w-full text-left px-3 py-2 text-xs hover:bg-stone-50 flex items-center gap-2 transition border-l-2 ${order.paymentStatus === status ? 'bg-stone-50 font-medium text-emerald-600 border-emerald-500' : 'text-stone-600 border-transparent'}`}
+                                      >
+                                        <div className={`w-1.5 h-1.5 rounded-full ${getPaymentStatusColor(status).split(' ')[0]}`} />
+                                        {getPaymentStatusLabel(status)}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-right">
+                          <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={(e) => handleEditOrder(order, e)}
+                              className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition"
+                              title="Editar"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteOrder(order.id, e)}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-red-50 rounded-md transition"
+                              title="Excluir"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </React.Fragment>
+                  );
+                });
+              })()}
             </tbody>
           </table>
+
         </div>
 
         {orders.length === 0 && (
@@ -866,7 +946,35 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
       </div>
 
       <div className="space-y-12">
+        <div className="flex justify-end -mb-8 relative z-10">
+          <div className="bg-white p-1 rounded-lg border border-stone-200 flex items-center gap-1 shadow-sm">
+            <span className="px-2 text-xs font-semibold text-stone-500 flex items-center gap-1">
+              <ArrowDownAZ size={14} />
+              Ordenar por:
+            </span>
+            <button
+              onClick={() => setSortBy('date')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition ${sortBy === 'date' ? 'bg-rose-100 text-rose-700' : 'text-stone-600 hover:bg-stone-50'}`}
+            >
+              Data
+            </button>
+            <button
+              onClick={() => setSortBy('client')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition ${sortBy === 'client' ? 'bg-rose-100 text-rose-700' : 'text-stone-600 hover:bg-stone-50'}`}
+            >
+              Cliente
+            </button>
+            <button
+              onClick={() => setSortBy('product')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition ${sortBy === 'product' ? 'bg-rose-100 text-rose-700' : 'text-stone-600 hover:bg-stone-50'}`}
+            >
+              Produto
+            </button>
+          </div>
+        </div>
+
         {/* Resumo de Pedidos em Aberto */}
+
         {openOrders.length > 0 && (
 
           <section className="mb-8">
@@ -886,108 +994,173 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
             {isSummaryOpen && (
               <div className="mt-4 bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
                 <div className="divide-y divide-stone-200">
-                  {openOrders.map(order => {
-                    const product = getProductDetails(order.productId);
-                    const daysInfo = getDaysRemaining(order.deliveryDate);
+                  {(() => {
+                    let groupCount = 0;
+                    let lastKey = '';
 
-                    return (
-                      <div
-                        key={order.id}
-                        className="flex items-center justify-between p-3 hover:bg-stone-50 transition cursor-pointer group"
-                        onClick={(e) => handleEditOrder(order, e)}
-                      >
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          <div className="w-10 h-10 bg-stone-100 rounded-lg overflow-hidden shrink-0 border border-stone-200">
-                            {product ? (
-                              <img src={product.photoUrl} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full bg-stone-200" />
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="font-medium text-stone-800 truncate text-sm">
-                                <span className="text-rose-600 font-bold mr-1">{order.quantity || 1}x</span>
-                                {product?.name || 'Produto desconhecido'}
-                              </p>
-                              <div className="relative" onClick={e => e.stopPropagation()}>
-                                <button
-                                  onClick={(e) => {
-                                    if (statusMenuOpenId === `summary-${order.id}`) {
-                                      setStatusMenuOpenId(null);
-                                    } else {
-                                      const rect = e.currentTarget.getBoundingClientRect();
-                                      setStatusMenuPosition({ top: rect.bottom + 4, left: rect.left });
-                                      setStatusMenuOpenId(`summary-${order.id}`);
-                                    }
-                                  }}
-                                  className={`text-[10px] px-1.5 py-0.5 rounded border ${getStatusColor(order.status)} hover:brightness-95 transition cursor-pointer flex items-center gap-1`}
-                                >
-                                  {getStatusLabel(order.status)}
-                                  <ChevronDown size={10} className="opacity-70" />
-                                </button>
+                    return openOrders.map((order, index) => {
+                      const product = getProductDetails(order.productId);
+                      const daysInfo = getDaysRemaining(order.deliveryDate);
 
-                                {statusMenuOpenId === `summary-${order.id}` && statusMenuPosition && (
-                                  <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpenId(null)} />
-                                    <div
-                                      className="fixed z-50 bg-white rounded-xl shadow-xl border border-stone-100 overflow-hidden min-w-[160px]"
-                                      style={{ top: statusMenuPosition.top, left: statusMenuPosition.left }}
-                                    >
-                                      {['pending', 'in_progress', 'done', 'delivered', 'cancelled'].map((status) => (
-                                        <button
-                                          key={status}
-                                          onClick={() => handleStatusUpdate(order.id, status as any)}
-                                          className={`w-full text-left px-4 py-2.5 text-sm hover:bg-stone-50 flex items-center gap-2 transition border-l-4 ${order.status === status ? 'bg-stone-50 font-medium text-rose-600 border-rose-500' : 'text-stone-600 border-transparent'}`}
-                                        >
-                                          <div className={`w-2 h-2 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
-                                          {getStatusLabel(status)}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </>
+                      // Helper function to force local date interpretation from YYYY-MM-DD string
+                      const parseLocalDate = (dateStr: string) => {
+                        const [year, month, day] = dateStr.split('-').map(Number);
+                        return new Date(year, month - 1, day);
+                      };
+
+                      const dateObj = parseLocalDate(order.deliveryDate);
+
+                      let currentKey = order.id;
+                      if (sortBy === 'client') currentKey = order.clientName;
+                      else if (sortBy === 'product') currentKey = product?.name || 'unknown';
+                      else if (sortBy === 'date') currentKey = dateObj.toLocaleDateString('pt-BR');
+
+                      if (currentKey !== lastKey) {
+                        if (index > 0) groupCount++;
+                        lastKey = currentKey;
+                      }
+
+                      const isEvenGroup = groupCount % 2 === 0;
+                      // Using a clearer color differentiation
+                      const rowBgClass = isEvenGroup ? 'bg-white' : 'bg-stone-100';
+
+                      const prevOrder = index > 0 ? openOrders[index - 1] : null;
+                      let showHeader = false;
+                      let headerTitle = '';
+                      let headerIcon = null;
+
+                      if (sortBy === 'client') {
+                        if (!prevOrder || prevOrder.clientName !== order.clientName) {
+                          showHeader = true;
+                          headerTitle = order.clientName;
+                          headerIcon = <User size={14} />;
+                        }
+                      } else if (sortBy === 'product') {
+                        const prodName = product?.name || 'Desconhecido';
+                        const prevProdName = prevOrder ? (getProductDetails(prevOrder.productId)?.name || 'Desconhecido') : '';
+                        if (!prevOrder || prevProdName !== prodName) {
+                          showHeader = true;
+                          headerTitle = prodName;
+                          headerIcon = <Package size={14} />;
+                        }
+                      } else if (sortBy === 'date') {
+                        const dateKey = dateObj.toLocaleDateString('pt-BR');
+
+                        const prevDateObj = prevOrder ? parseLocalDate(prevOrder.deliveryDate) : null;
+                        const prevDateKey = prevDateObj ? prevDateObj.toLocaleDateString('pt-BR') : '';
+
+                        if (!prevOrder || prevDateKey !== dateKey) {
+                          showHeader = true;
+                          const weekday = dateObj.toLocaleDateString('pt-BR', { weekday: 'long' });
+                          headerTitle = `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${dateKey}`;
+                          headerIcon = <Calendar size={14} />;
+                        }
+                      }
+
+                      return (
+                        <React.Fragment key={order.id}>
+                          {showHeader && (
+                            <div className="bg-amber-50 px-4 py-1.5 text-xs font-bold text-amber-900 uppercase tracking-wider border-b border-amber-100 flex items-center gap-2">
+                              {headerIcon}
+                              {headerTitle}
+                            </div>
+                          )}
+                          <div
+                            key={order.id}
+                            className={`flex items-center justify-between p-3 transition cursor-pointer group border-b border-stone-100 last:border-0 ${rowBgClass} hover:bg-rose-50`}
+                            onClick={(e) => handleEditOrder(order, e)}
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="w-10 h-10 bg-stone-100 rounded-lg overflow-hidden shrink-0 border border-stone-200">
+                                {product ? (
+                                  <img src={product.photoUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full bg-stone-200" />
                                 )}
                               </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-stone-800 truncate text-sm">
+                                    <span className="text-rose-600 font-bold mr-1">{order.quantity || 1}x</span>
+                                    {product?.name || 'Produto desconhecido'}
+                                  </p>
+                                  <div className="relative" onClick={e => e.stopPropagation()}>
+                                    <button
+                                      onClick={(e) => {
+                                        if (statusMenuOpenId === `summary-${order.id}`) {
+                                          setStatusMenuOpenId(null);
+                                        } else {
+                                          const rect = e.currentTarget.getBoundingClientRect();
+                                          setStatusMenuPosition({ top: rect.bottom + 4, left: rect.left });
+                                          setStatusMenuOpenId(`summary-${order.id}`);
+                                        }
+                                      }}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border ${getStatusColor(order.status)} hover:brightness-95 transition cursor-pointer flex items-center gap-1`}
+                                    >
+                                      {getStatusLabel(order.status)}
+                                      <ChevronDown size={10} className="opacity-70" />
+                                    </button>
+
+                                    {statusMenuOpenId === `summary-${order.id}` && statusMenuPosition && (
+                                      <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setStatusMenuOpenId(null)} />
+                                        <div
+                                          className="fixed z-50 bg-white rounded-xl shadow-xl border border-stone-100 overflow-hidden min-w-[160px]"
+                                          style={{ top: statusMenuPosition.top, left: statusMenuPosition.left }}
+                                        >
+                                          {['pending', 'in_progress', 'done', 'delivered', 'cancelled'].map((status) => (
+                                            <button
+                                              key={status}
+                                              onClick={() => handleStatusUpdate(order.id, status as any)}
+                                              className={`w-full text-left px-4 py-2.5 text-sm hover:bg-stone-50 flex items-center gap-2 transition border-l-4 ${order.status === status ? 'bg-stone-50 font-medium text-rose-600 border-rose-500' : 'text-stone-600 border-transparent'}`}
+                                            >
+                                              <div className={`w-2 h-2 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
+                                              {getStatusLabel(status)}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                                <p className="text-xs text-stone-500 truncate flex items-center gap-1">
+                                  <User size={10} />
+                                  {order.clientName}
+                                </p>
+                              </div>
                             </div>
-                            <p className="text-xs text-stone-500 truncate flex items-center gap-1">
-                              <User size={10} />
-                              {order.clientName}
-                            </p>
+
+                            <div className="flex-1 px-4 hidden md:block min-w-0">
+                              {order.notes && (
+                                <p className="text-xs text-red-600 whitespace-normal break-words leading-tight text-right">
+                                  {order.notes}
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-4 shrink-0 pl-2">
+                              {daysInfo && (
+                                <div className="text-right">
+                                  <span className={`block text-xs ${daysInfo.color} font-medium`}>
+                                    {daysInfo.text}
+                                  </span>
+                                  <span className="text-[10px] text-stone-400">
+                                    {dateObj.toLocaleDateString('pt-BR')}
+                                  </span>
+                                </div>
+                              )}
+                              <ChevronRight size={16} className="text-stone-300 group-hover:text-stone-500 transition" />
+                            </div>
                           </div>
-                        </div>
-
-                        <div className="flex-1 px-4 hidden md:block min-w-0">
-                          {order.notes && (
-                            <p className="text-xs text-red-600 whitespace-normal break-words leading-tight text-right">
-                              {order.notes}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-4 shrink-0 pl-2">
-                          {daysInfo && (
-                            <div className="text-right">
-                              <span className={`block text-xs ${daysInfo.color} font-medium`}>
-                                {daysInfo.text}
-                              </span>
-                              <span className="text-[10px] text-stone-400">
-                                {new Date(order.deliveryDate).toLocaleDateString('pt-BR')}
-                              </span>
-                            </div>
-                          )}
-                          <ChevronRight size={16} className="text-stone-300 group-hover:text-stone-500 transition" />
-                        </div>
-                      </div>
-                    );
-                  })}
-
+                        </React.Fragment>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
           </section>
         )}
-        {/* Open Orders */}
-
         {/* Open Orders */}
         <section>
           <button
@@ -1087,26 +1260,77 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
                   {/* Client Selection */}
                   <div>
                     <label className="block text-xs font-medium text-stone-700 mb-1">Cliente</label>
-                    <select
-                      required
-                      className="w-full border rounded-lg p-1.5 text-sm bg-white"
-                      value={formData.clientId}
-                      onChange={(e) => {
-                        const cid = e.target.value;
-                        const client = clients.find(c => c.id === cid);
-                        setFormData(prev => ({
-                          ...prev,
-                          clientId: cid,
-                          clientName: client ? client.name : '',
-                          whatsapp: client ? client.whatsapp : ''
-                        }));
-                      }}
-                    >
-                      <option value="">Selecione um cliente...</option>
-                      {clients.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsClientSelectOpen(!isClientSelectOpen)}
+                        className="w-full border rounded-lg p-1.5 text-sm bg-white text-left flex items-center justify-between focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none"
+                      >
+                        <span className={`block truncate ${formData.clientId ? 'text-stone-900' : 'text-stone-500'}`}>
+                          {formData.clientId
+                            ? (() => {
+                              const c = clients.find(cl => cl.id === formData.clientId);
+                              return c ? (
+                                <span className="flex items-center gap-2">
+                                  {c.name}
+                                  {c.notes && <span className="text-stone-400 font-normal opacity-70 text-xs">- {c.notes}</span>}
+                                </span>
+                              ) : 'Cliente não encontrado';
+                            })()
+                            : 'Selecione um cliente...'}
+                        </span>
+                        <ChevronDown size={16} className="text-stone-400 shrink-0" />
+                      </button>
+
+                      {isClientSelectOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setIsClientSelectOpen(false)} />
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            <div className="p-2 sticky top-0 bg-white border-b border-stone-100">
+                              <div className="flex items-center gap-2 px-2 py-1.5 bg-stone-50 rounded-md border border-stone-200">
+                                <Search size={14} className="text-stone-400" />
+                                <input
+                                  autoFocus
+                                  className="bg-transparent border-none outline-none text-xs w-full placeholder:text-stone-400 text-stone-700"
+                                  placeholder="Buscar cliente..."
+                                  value={clientSearchInfo}
+                                  onChange={(e) => setClientSearchInfo(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            </div>
+                            <div className="py-1">
+                              {clients.filter(c =>
+                                c.name.toLowerCase().includes(clientSearchInfo.toLowerCase()) ||
+                                (c.notes && c.notes.toLowerCase().includes(clientSearchInfo.toLowerCase()))
+                              ).map(c => (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      clientId: c.id,
+                                      clientName: c.name,
+                                      whatsapp: c.whatsapp
+                                    }));
+                                    setIsClientSelectOpen(false);
+                                    setClientSearchInfo('');
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 flex items-center gap-2 border-b border-stone-50 last:border-0 transition-colors"
+                                >
+                                  <span className="font-medium text-stone-700 whitespace-nowrap">{c.name}</span>
+                                  {c.notes && <span className="text-xs text-stone-400 truncate flex-1 md:flex-initial">- {c.notes}</span>}
+                                </button>
+                              ))}
+                              {clients.filter(c => c.name.toLowerCase().includes(clientSearchInfo.toLowerCase())).length === 0 && (
+                                <div className="p-3 text-center text-xs text-stone-400">Nenhum cliente encontrado</div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => setIsClientModalOpen(true)}
@@ -1119,25 +1343,79 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
                   {/* Product Selection */}
                   <div>
                     <label className="block text-xs font-medium text-stone-700 mb-1">Produto do Catálogo</label>
-                    <select
-                      required
-                      className="w-full border rounded-lg p-1.5 text-sm bg-white"
-                      value={formData.productId}
-                      onChange={(e) => {
-                        const pid = e.target.value;
-                        const prod = products.find(p => p.id === pid);
-                        setFormData(prev => ({
-                          ...prev,
-                          productId: pid,
-                          finalPrice: prod ? (prod.basePrice * prev.quantity).toString() : prev.finalPrice
-                        }));
-                      }}
-                    >
-                      <option value="">Selecione um produto...</option>
-                      {products.map(p => (
-                        <option key={p.id} value={p.id}>{p.name} - R$ {p.basePrice}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsProductSelectOpen(!isProductSelectOpen)}
+                        className="w-full border rounded-lg p-1.5 text-sm bg-white text-left flex items-center justify-between focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none"
+                      >
+                        <span className={`block truncate ${formData.productId ? 'text-stone-900' : 'text-stone-500'}`}>
+                          {formData.productId
+                            ? (() => {
+                              const p = products.find(pd => pd.id === formData.productId);
+                              return p ? (
+                                <span className="flex items-center justify-between w-full pr-2">
+                                  <span>{p.name}</span>
+                                  <span className="text-stone-500 text-xs font-medium">R$ {p.basePrice}</span>
+                                </span>
+                              ) : 'Produto não encontrado';
+                            })()
+                            : 'Selecione um produto...'}
+                        </span>
+                        <ChevronDown size={16} className="text-stone-400 shrink-0" />
+                      </button>
+
+                      {isProductSelectOpen && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setIsProductSelectOpen(false)} />
+                          <div className="absolute z-20 w-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                            <div className="p-2 sticky top-0 bg-white border-b border-stone-100">
+                              <div className="flex items-center gap-2 px-2 py-1.5 bg-stone-50 rounded-md border border-stone-200">
+                                <Search size={14} className="text-stone-400" />
+                                <input
+                                  autoFocus
+                                  className="bg-transparent border-none outline-none text-xs w-full placeholder:text-stone-400 text-stone-700"
+                                  placeholder="Buscar produto..."
+                                  value={productSearchInfo}
+                                  onChange={(e) => setProductSearchInfo(e.target.value)}
+                                  onClick={(e) => e.stopPropagation()}
+                                />
+                              </div>
+                            </div>
+                            <div className="py-1">
+                              {products.filter(p =>
+                                p.name.toLowerCase().includes(productSearchInfo.toLowerCase()) ||
+                                (p.category && p.category.toLowerCase().includes(productSearchInfo.toLowerCase()))
+                              ).map(p => (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData(prev => ({
+                                      ...prev,
+                                      productId: p.id,
+                                      finalPrice: (p.basePrice * prev.quantity).toString()
+                                    }));
+                                    setIsProductSelectOpen(false);
+                                    setProductSearchInfo('');
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-rose-50 flex items-center justify-between border-b border-stone-50 last:border-0 transition-colors"
+                                >
+                                  <div className="flex flex-col">
+                                    <span className="font-medium text-stone-700">{p.name}</span>
+                                    {p.category && <span className="text-[10px] text-stone-400">{p.category}</span>}
+                                  </div>
+                                  <span className="text-stone-600 font-medium text-xs whitespace-nowrap bg-stone-100 px-1.5 py-0.5 rounded">R$ {p.basePrice}</span>
+                                </button>
+                              ))}
+                              {products.filter(p => p.name.toLowerCase().includes(productSearchInfo.toLowerCase())).length === 0 && (
+                                <div className="p-3 text-center text-xs text-stone-400">Nenhum produto encontrado</div>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => setIsProductModalOpen(true)}
@@ -1651,54 +1929,56 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
       }
 
       {/* PDF Filter Modal */}
-      {isPdfFilterModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="p-6">
-              <h3 className="text-xl font-bold mb-4">Filtrar Relatório PDF</h3>
-              <p className="text-stone-500 text-sm mb-4">Selecione quais status deseja incluir no relatório:</p>
+      {
+        isPdfFilterModalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+              <div className="p-6">
+                <h3 className="text-xl font-bold mb-4">Filtrar Relatório PDF</h3>
+                <p className="text-stone-500 text-sm mb-4">Selecione quais status deseja incluir no relatório:</p>
 
-              <div className="space-y-3 mb-6">
-                {['pending', 'in_progress', 'done', 'delivered', 'cancelled'].map(status => (
-                  <label key={status} className="flex items-center gap-3 p-3 bg-stone-50 rounded-lg border border-stone-200 cursor-pointer hover:bg-stone-100 transition">
-                    <input
-                      type="checkbox"
-                      checked={pdfSelectedStatuses.includes(status)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setPdfSelectedStatuses(prev => [...prev, status]);
-                        } else {
-                          setPdfSelectedStatuses(prev => prev.filter(s => s !== status));
-                        }
-                      }}
-                      className="w-5 h-5 text-rose-600 rounded focus:ring-rose-500 border-stone-300"
-                    />
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
-                      <span className="text-sm font-medium text-stone-700">{getStatusLabel(status)}</span>
-                    </div>
-                  </label>
-                ))}
-              </div>
+                <div className="space-y-3 mb-6">
+                  {['pending', 'in_progress', 'done', 'delivered', 'cancelled'].map(status => (
+                    <label key={status} className="flex items-center gap-3 p-3 bg-stone-50 rounded-lg border border-stone-200 cursor-pointer hover:bg-stone-100 transition">
+                      <input
+                        type="checkbox"
+                        checked={pdfSelectedStatuses.includes(status)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setPdfSelectedStatuses(prev => [...prev, status]);
+                          } else {
+                            setPdfSelectedStatuses(prev => prev.filter(s => s !== status));
+                          }
+                        }}
+                        className="w-5 h-5 text-rose-600 rounded focus:ring-rose-500 border-stone-300"
+                      />
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
+                        <span className="text-sm font-medium text-stone-700">{getStatusLabel(status)}</span>
+                      </div>
+                    </label>
+                  ))}
+                </div>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setIsPdfFilterModalOpen(false)}
-                  className="flex-1 px-4 py-2 text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleGeneratePDF}
-                  className="flex-1 px-4 py-2 bg-stone-800 text-white hover:bg-stone-900 rounded-lg transition font-medium"
-                >
-                  Gerar PDF
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setIsPdfFilterModalOpen(false)}
+                    className="flex-1 px-4 py-2 text-stone-600 bg-stone-100 hover:bg-stone-200 rounded-lg transition font-medium"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleGeneratePDF}
+                    className="flex-1 px-4 py-2 bg-stone-800 text-white hover:bg-stone-900 rounded-lg transition font-medium"
+                  >
+                    Gerar PDF
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
     </div>
   );
 };
