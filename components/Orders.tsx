@@ -615,6 +615,19 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
                                 {order.clientName}
                               </div>
                             </div>
+                            {product?.pdfLink && (
+                              <div onClick={e => e.stopPropagation()}>
+                                <a
+                                  href={product.pdfLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded-md transition flex items-center justify-center shrink-0 border border-red-200 bg-white shadow-sm"
+                                  title="Ver Receita PDF"
+                                >
+                                  <FileText size={14} />
+                                </a>
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3 align-middle">
@@ -1084,6 +1097,19 @@ export const Orders: React.FC<Props> = ({ onSelectOrder }) => {
                                     <span className="text-rose-600 font-bold mr-1">{order.quantity || 1}x</span>
                                     {product?.name || 'Produto desconhecido'}
                                   </p>
+                                  {product?.pdfLink && (
+                                    <div onClick={e => e.stopPropagation()} className="shrink-0 flex items-center">
+                                      <a
+                                        href={product.pdfLink}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1 text-red-500 hover:bg-red-50 rounded-md transition border border-red-200 bg-white shadow-sm"
+                                        title="Ver Receita PDF"
+                                      >
+                                        <FileText size={12} />
+                                      </a>
+                                    </div>
+                                  )}
                                   <div className="relative" onClick={e => e.stopPropagation()}>
                                     <button
                                       onClick={(e) => {

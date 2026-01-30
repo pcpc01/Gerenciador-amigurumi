@@ -38,6 +38,7 @@ export const getProducts = async (): Promise<Product[]> => {
         elo7Link: p.elo7_link,
         nuvemshopLink: p.nuvemshop_link,
         showInCatalog: p.show_in_catalog !== false, // Default to true if null/undefined
+        priceHistory: p.price_history || [],
     }));
 };
 
@@ -66,6 +67,7 @@ export const saveProduct = async (product: Product): Promise<void> => {
         elo7_link: product.elo7Link,
         nuvemshop_link: product.nuvemshopLink,
         show_in_catalog: product.showInCatalog,
+        price_history: product.priceHistory,
     };
 
     const { error } = await supabase
@@ -130,6 +132,7 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
         elo7Link: data.elo7_link,
         nuvemshopLink: data.nuvemshop_link,
         showInCatalog: data.show_in_catalog !== false,
+        priceHistory: data.price_history || [],
     };
 };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, FileText, Image as ImageIcon, Package, ArrowUpDown, X, ExternalLink, Eye, EyeOff, Download, Star } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, FileText, Image as ImageIcon, Package, ArrowUpDown, X, ExternalLink, Eye, EyeOff, Download, Star, Upload, Check, Loader2, TrendingUp } from 'lucide-react';
 import { Product, Category } from '../types';
 import * as storage from '../services/storage_supabase';
 import { uploadToCloudinary } from '../services/cloudinary';
@@ -7,18 +7,25 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 import ReactMarkdown from 'react-markdown';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+interface ExpandableTextProps {
+  text: string;
+  maxLength?: number;
+  className?: string;
+  buttonClassName?: string;
+  moreLabel?: string;
+  lessLabel?: string;
+}
 
 const ExpandableText = ({
   text,
   maxLength = 150,
   className = "text-stone-600 leading-relaxed",
-  buttonClassName = "text-rose-600 text-sm font-medium mt-2 hover:underline focus:outline-none"
-}: {
-  text: string,
-  maxLength?: number,
-  className?: string,
-  buttonClassName?: string
-}) => {
+  buttonClassName = "text-rose-600 text-sm font-medium mt-2 hover:underline focus:outline-none",
+  moreLabel = 'Ver mais',
+  lessLabel = 'Ver menos'
+}: ExpandableTextProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Função simples para converter HTML para Markdown
@@ -83,8 +90,189 @@ const ExpandableText = ({
         onClick={() => setIsExpanded(!isExpanded)}
         className={buttonClassName}
       >
-        {isExpanded ? 'Ver menos' : 'Ver mais'}
+        {isExpanded ? lessLabel : moreLabel}
       </button>
+    </div>
+  );
+};
+
+interface ImageUploadBoxProps {
+  image: string;
+  onImageChange: (newUrl: string) => void;
+  id: string;
+  label?: string;
+  isMain?: boolean;
+  onMarkAsMain?: () => void;
+  onDropImage?: (draggedId: string) => void;
+  onRemove?: () => void;
+}
+
+const ImageUploadBox: React.FC<ImageUploadBoxProps> = ({ image, onImageChange, id, label, isMain, onMarkAsMain, onDropImage, onRemove }) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isBoxDragging, setIsBoxDragging] = useState(false);
+
+  const handleFile = async (file: File) => {
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const url = await uploadToCloudinary(file);
+      onImageChange(url);
+    } catch (error) {
+      console.error("Error uploading:", error);
+      alert("Erro ao fazer upload da imagem.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    // If file drop
+    if (e.dataTransfer.files?.[0]) {
+      handleFile(e.dataTransfer.files[0]);
+      return;
+    }
+
+    // If box drag/drop
+    const draggedId = e.dataTransfer.getData("text/plain");
+    if (draggedId && draggedId !== id && onDropImage) {
+      onDropImage(draggedId);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent) => {
+    if (image) {
+      e.dataTransfer.setData("text/plain", id);
+      e.dataTransfer.effectAllowed = "move";
+      setIsBoxDragging(true);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setIsBoxDragging(false);
+  };
+
+  return (
+    <div
+      className={`w-full ${isBoxDragging ? 'opacity-50' : 'opacity-100'} transition-opacity`}
+      draggable={!!image}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={handleDrop}
+    >
+      {label && <label className="block text-sm font-medium text-stone-700 mb-1">{label}</label>}
+
+      {!image ? (
+        <div
+          className={`relative border-2 border-dashed rounded-xl transition-all duration-200 flex flex-col items-center justify-center cursor-pointer group bg-stone-50 h-32
+            ${isDragging ? 'border-rose-500 bg-rose-50' : 'border-stone-300 hover:border-rose-400 hover:bg-stone-100'}
+          `}
+          onClick={() => document.getElementById(id)?.click()}
+        >
+          <input
+            type="file"
+            id={id}
+            className="hidden"
+            accept="image/*"
+            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+          />
+
+          {isUploading ? (
+            <div className="flex flex-col items-center gap-2 text-rose-600">
+              <Loader2 className="animate-spin" size={24} />
+              <span className="text-sm font-medium">Enviando...</span>
+            </div>
+          ) : (
+            <>
+              <div className="p-2 bg-white rounded-full shadow-sm mb-2 group-hover:scale-110 transition-transform duration-200">
+                <Upload size={16} className="text-rose-500" />
+              </div>
+              <p className="text-xs font-medium text-stone-700 text-center px-2 leading-tight">
+                {isMain ? "Foto de Capa" : "Adicionar Foto"}
+              </p>
+            </>
+          )}
+        </div>
+      ) : (
+        <div className="relative rounded-xl overflow-hidden border border-stone-200 bg-stone-100 group h-32">
+          <img
+            src={image}
+            alt="Uploaded"
+            className="w-full h-full object-cover"
+          />
+
+          {/* Overlay with Uploaded Indicator and Actions */}
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 backdrop-blur-sm">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => document.getElementById(id)?.click()}
+                className="p-1.5 bg-white text-stone-700 rounded-lg hover:bg-stone-50 transition shadow-lg font-medium text-[10px] flex items-center gap-1"
+                title="Alterar Imagem"
+              >
+                <Edit2 size={12} /> Trocar
+              </button>
+
+              {!isMain && onMarkAsMain && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMarkAsMain();
+                  }}
+                  className="p-1.5 bg-amber-400 text-stone-900 rounded-lg hover:bg-amber-500 transition shadow-lg font-bold text-[10px] flex items-center gap-1"
+                  title="Definir como Capa"
+                >
+                  <Star size={12} strokeWidth={2.5} /> Capa
+                </button>
+              )}
+
+              {onRemove && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove();
+                  }}
+                  className="p-1.5 bg-white text-red-600 rounded-lg hover:bg-red-50 transition shadow-lg font-medium text-[10px] flex items-center gap-1"
+                  title="Remover Imagem"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
+
+            <input
+              type="file"
+              id={id}
+              className="hidden"
+              accept="image/*"
+              onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+            />
+          </div>
+
+          {/* Status Badges */}
+          <div className="absolute top-2 right-2 flex flex-col items-end gap-1 pointer-events-none">
+            {isMain ? (
+              <div className="bg-amber-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
+                <Star size={10} fill="currentColor" />
+                CAPA
+              </div>
+            ) : (
+              <div className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm flex items-center gap-1">
+                <Check size={10} strokeWidth={3} />
+                OK
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -109,6 +297,13 @@ export const Catalog: React.FC = () => {
   const [sortOption, setSortOption] = useState('name_asc');
   const [filterCategory, setFilterCategory] = useState('');
   const [availableCategories, setAvailableCategories] = useState<Category[]>([]);
+  const [isPriceHistoryModalOpen, setIsPriceHistoryModalOpen] = useState(false);
+  const [priceHistoryProduct, setPriceHistoryProduct] = useState<Product | null>(null);
+  const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [tempPriceValue, setTempPriceValue] = useState<string>('');
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [tempNameValue, setTempNameValue] = useState<string>('');
 
   // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -129,7 +324,8 @@ export const Catalog: React.FC = () => {
     elo7Link: '',
 
     nuvemshopLink: '',
-    showInCatalog: true
+    showInCatalog: true,
+    priceHistory: []
   });
 
   useEffect(() => {
@@ -178,7 +374,8 @@ export const Catalog: React.FC = () => {
         elo7Link: '',
 
         nuvemshopLink: '',
-        showInCatalog: true
+        showInCatalog: true,
+        priceHistory: []
       });
     }
     setIsModalOpen(true);
@@ -220,6 +417,31 @@ export const Catalog: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Logic for Price History
+    let newHistory = editingProduct?.priceHistory ? [...editingProduct.priceHistory] : [];
+
+    // If it's a new product and has a price, add initial history
+    if (!editingProduct && formData.basePrice && formData.basePrice > 0) {
+      newHistory = [{ date: Date.now(), price: formData.basePrice }];
+    }
+
+    // If editing, check if price changed
+    if (editingProduct && formData.basePrice !== undefined && formData.basePrice !== editingProduct.basePrice) {
+      // If history was empty, backfill the start state
+      if (newHistory.length === 0) {
+        newHistory.push({
+          date: editingProduct.createdAt || Date.now(),
+          price: editingProduct.basePrice
+        });
+      }
+      // Record new price
+      newHistory.push({
+        date: Date.now(),
+        price: formData.basePrice
+      });
+    }
+
     const productToSave: Product = {
       id: editingProduct ? editingProduct.id : generateUUID(),
       name: formData.name || 'Sem nome',
@@ -239,12 +461,73 @@ export const Catalog: React.FC = () => {
       elo7Link: formData.elo7Link || '',
       nuvemshopLink: formData.nuvemshopLink || '',
       showInCatalog: formData.showInCatalog !== false,
-      createdAt: editingProduct?.createdAt || Date.now()
+      createdAt: editingProduct?.createdAt || Date.now(),
+      priceHistory: newHistory
     };
 
     await storage.saveProduct(productToSave);
     setIsModalOpen(false);
     loadProducts();
+  };
+
+  const handleQuickPriceSave = async (product: Product, newPrice: number) => {
+    if (newPrice === product.basePrice) {
+      setEditingPriceId(null);
+      return;
+    }
+
+    let newHistory = product.priceHistory ? [...product.priceHistory] : [];
+
+    // Se não tiver histórico, adiciona o valor atual como ponto inicial
+    if (newHistory.length === 0) {
+      newHistory.push({
+        date: product.createdAt || Date.now(),
+        price: product.basePrice
+      });
+    }
+
+    // Registra o novo preço
+    newHistory.push({
+      date: Date.now(),
+      price: newPrice
+    });
+
+    const updatedProduct: Product = {
+      ...product,
+      basePrice: newPrice,
+      priceHistory: newHistory
+    };
+
+    try {
+      await storage.saveProduct(updatedProduct);
+      setProducts(prev => prev.map(p => p.id === product.id ? updatedProduct : p));
+      setEditingPriceId(null);
+    } catch (error) {
+      console.error('Error updating price:', error);
+      alert('Erro ao atualizar preço.');
+    }
+  };
+
+  const handleQuickNameSave = async (product: Product, newName: string) => {
+    if (!newName || !newName.trim() || newName === product.name) {
+      setEditingNameId(null);
+      return;
+    }
+
+    const trimmedName = newName.trim();
+    const updatedProduct: Product = {
+      ...product,
+      name: trimmedName
+    };
+
+    try {
+      await storage.saveProduct(updatedProduct);
+      setProducts(prev => prev.map(p => p.id === product.id ? updatedProduct : p));
+      setEditingNameId(null);
+    } catch (error) {
+      console.error('Error updating name:', error);
+      alert('Erro ao atualizar nome.');
+    }
   };
 
   const handleToggleVisibility = async (e: React.MouseEvent, product: Product) => {
@@ -404,12 +687,15 @@ export const Catalog: React.FC = () => {
 
   return (
     <div className="p-4 max-w-4xl mx-auto pb-24">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-stone-800">Catálogo de Peças</h2>
           <p className="text-stone-500 text-sm">Gerencie suas receitas e produtos base</p>
         </div>
-        <div className="flex items-center gap-2">
+
+
+
+        <div className="flex items-center gap-2 md:ml-auto">
           <button
             onClick={handleExportPDF}
             className="bg-white text-stone-600 border border-stone-300 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-stone-50 transition shadow-sm"
@@ -417,6 +703,14 @@ export const Catalog: React.FC = () => {
           >
             <Download size={18} />
             <span className="hidden sm:inline">PDF</span>
+          </button>
+          <button
+            onClick={() => setIsAdjustmentModalOpen(true)}
+            className="bg-white text-stone-600 border border-stone-300 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-stone-50 transition shadow-sm"
+            title="Ver Ajustes de Preços"
+          >
+            <TrendingUp size={18} />
+            <span className="hidden sm:inline">Ajuste de Preços</span>
           </button>
           <button
             onClick={() => handleOpenModal()}
@@ -527,9 +821,37 @@ export const Catalog: React.FC = () => {
                             {product.category}
                           </span>
                         )}
-                        <div className="font-bold text-stone-800 text-sm leading-none">
-                          {product.name}
-                        </div>
+                        {editingNameId === product.id ? (
+                          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                            <input
+                              autoFocus
+                              type="text"
+                              className="w-full px-1 py-0.5 border border-rose-300 rounded text-sm font-bold text-stone-800 focus:ring-1 focus:ring-rose-500 outline-none"
+                              value={tempNameValue}
+                              onChange={e => setTempNameValue(e.target.value)}
+                              onBlur={() => handleQuickNameSave(product, tempNameValue)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleQuickNameSave(product, tempNameValue);
+                                if (e.key === 'Escape') setEditingNameId(null);
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className="group/name relative cursor-pointer hover:bg-rose-50 px-2 py-0.5 rounded transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingNameId(product.id);
+                              setTempNameValue(product.name);
+                            }}
+                            title="Clique para editar o nome"
+                          >
+                            <div className="font-bold text-stone-800 text-sm leading-none">
+                              {product.name}
+                            </div>
+                            <Edit2 size={10} className="absolute -right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/name:opacity-100 text-rose-500 transition-opacity" />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -551,9 +873,39 @@ export const Catalog: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-4 py-2 align-middle">
-                    <span className="text-xs font-bold text-stone-800">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
-                    </span>
+                    {editingPriceId === product.id ? (
+                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                        <span className="text-xs font-bold text-stone-500">R$</span>
+                        <input
+                          autoFocus
+                          type="number"
+                          step="0.01"
+                          className="w-20 px-1 py-0.5 border border-rose-300 rounded text-xs font-bold text-stone-800 focus:ring-1 focus:ring-rose-500 outline-none"
+                          value={tempPriceValue}
+                          onChange={e => setTempPriceValue(e.target.value)}
+                          onBlur={() => handleQuickPriceSave(product, parseFloat(tempPriceValue))}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') handleQuickPriceSave(product, parseFloat(tempPriceValue));
+                            if (e.key === 'Escape') setEditingPriceId(null);
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="group/price relative cursor-pointer hover:bg-rose-50 px-2 py-1 rounded transition-colors inline-block"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingPriceId(product.id);
+                          setTempPriceValue(product.basePrice.toString());
+                        }}
+                        title="Clique para editar o preço"
+                      >
+                        <span className="text-xs font-bold text-stone-800">
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(product.basePrice)}
+                        </span>
+                        <Edit2 size={10} className="absolute -right-2 top-1 opacity-0 group-hover/price:opacity-100 text-rose-500 transition-opacity" />
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-2 align-middle">
                     <div className="flex flex-wrap gap-2" onClick={e => e.stopPropagation()}>
@@ -618,6 +970,16 @@ export const Catalog: React.FC = () => {
                   </td>
                   <td className="px-4 py-2 align-middle text-right">
                     <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => {
+                          setPriceHistoryProduct(product);
+                          setIsPriceHistoryModalOpen(true);
+                        }}
+                        className="p-1.5 text-stone-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+                        title="Histórico de Preço"
+                      >
+                        <TrendingUp size={14} />
+                      </button>
                       <button
                         onClick={() => handleOpenModal(product)}
                         className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
@@ -761,15 +1123,15 @@ export const Catalog: React.FC = () => {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  <div className="md:col-span-6">
+                  <div className="md:col-span-5">
                     <label className="block text-sm font-medium text-stone-700 mb-1">Nome</label>
-                    <input required className="w-full border rounded-lg p-2" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
+                    <input required className="w-full h-9 text-sm border border-stone-300 rounded-lg px-3 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
                   </div>
-                  <div className="md:col-span-3">
+                  <div className="md:col-span-4">
                     <label className="block text-sm font-medium text-stone-700 mb-1">Categoria</label>
                     <div className="flex gap-2">
                       <select
-                        className="w-full border rounded-lg p-2 bg-white"
+                        className="w-full h-9 text-sm border border-stone-300 rounded-lg px-3 bg-white focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
                         value={formData.categoryId || ''}
                         onChange={e => {
                           const selectedCat = availableCategories.find(c => c.id === e.target.value);
@@ -788,7 +1150,7 @@ export const Catalog: React.FC = () => {
                       <button
                         type="button"
                         onClick={handleAddCategory}
-                        className="p-1.5 bg-stone-100 rounded-lg hover:bg-stone-200 text-stone-600 border border-stone-200 shrink-0"
+                        className="h-9 w-9 bg-stone-100 rounded-lg hover:bg-stone-200 text-stone-600 border border-stone-300 transition shrink-0 flex items-center justify-center"
                         title="Nova Categoria"
                       >
                         <Plus size={16} />
@@ -798,11 +1160,11 @@ export const Catalog: React.FC = () => {
                   <div className="md:col-span-3">
                     <label className="block text-sm font-medium text-stone-700 mb-1">Preço Base</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 font-medium">R$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500 font-medium text-sm">R$</span>
                       <input
                         type="number"
                         step="0.01"
-                        className="w-full border rounded-lg p-2 pl-10"
+                        className="w-full h-9 text-sm border border-stone-300 rounded-lg pl-9 pr-3 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none transition"
                         value={formData.basePrice}
                         onChange={e => setFormData({ ...formData, basePrice: parseFloat(e.target.value) })}
                       />
@@ -850,130 +1212,86 @@ export const Catalog: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-stone-700 mb-1">Foto do Produto</label>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <input
-                        className="w-full border rounded-lg p-2 flex-1"
-                        value={formData.photoUrl}
-                        onChange={e => setFormData({ ...formData, photoUrl: e.target.value })}
-                        placeholder="https://..."
-                      />
-                      <input
-                        type="file"
-                        id="main-photo-upload"
-                        className="hidden"
-                        accept="image/*"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Fotos do Produto</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <ImageUploadBox
+                      id="main-photo"
+                      image={formData.photoUrl || ''}
+                      onImageChange={(url) => setFormData(prev => ({ ...prev, photoUrl: url }))}
+                      isMain={true}
+                      onRemove={() => setFormData(prev => ({ ...prev, photoUrl: '' }))}
+                      onDropImage={(draggedId) => {
+                        // Logic to swap images
+                        const draggedIndex = parseInt(draggedId.split('-').pop() || '0');
+                        if (isNaN(draggedIndex)) return; // If dropped main on main, unlikely but handle
 
-                          try {
-                            const url = await uploadToCloudinary(file);
-                            setFormData(prev => ({ ...prev, photoUrl: url }));
-                          } catch (error) {
-                            console.error("Error uploading image:", error);
-                            alert("Erro ao fazer upload da imagem.");
+                        // If dragged is an additional image (0, 1, 2...)
+                        const currentMain = formData.photoUrl;
+                        const additionalImages = [...(formData.additionalImages || [])];
+                        const newMain = additionalImages[draggedIndex];
+
+                        if (!newMain) return;
+
+                        additionalImages[draggedIndex] = currentMain || ''; // Swap
+                        setFormData(prev => ({ ...prev, photoUrl: newMain, additionalImages }));
+                      }}
+                    />
+                    {[0, 1, 2].map((index) => (
+                      <ImageUploadBox
+                        key={index}
+                        id={`additional-${index}`}
+                        image={formData.additionalImages?.[index] || ''}
+                        onImageChange={(url) => {
+                          const newImages = [...(formData.additionalImages || [])];
+                          newImages[index] = url;
+                          setFormData(prev => ({ ...prev, additionalImages: newImages }));
+                        }}
+                        onRemove={() => {
+                          const newImages = [...(formData.additionalImages || [])];
+                          newImages[index] = '';
+                          setFormData(prev => ({ ...prev, additionalImages: newImages }));
+                        }}
+                        onMarkAsMain={() => {
+                          const currentMain = formData.photoUrl;
+                          const newMain = formData.additionalImages?.[index] || '';
+
+                          if (!newMain) return;
+
+                          const newAdditional = [...(formData.additionalImages || [])];
+                          newAdditional[index] = currentMain;
+
+                          setFormData(prev => ({
+                            ...prev,
+                            photoUrl: newMain,
+                            additionalImages: newAdditional
+                          }));
+                        }}
+                        onDropImage={(draggedId) => {
+                          const additionalImages = [...(formData.additionalImages || [])];
+                          const targetImage = additionalImages[index];
+
+                          if (draggedId === 'main-photo') {
+                            // Swapping Main -> Additional[index]
+                            const currentMain = formData.photoUrl;
+                            if (!currentMain) return;
+
+                            additionalImages[index] = currentMain;
+                            setFormData(prev => ({ ...prev, photoUrl: targetImage || '', additionalImages }));
+                          } else {
+                            // Swapping Additional -> Additional
+                            const draggedIndex = parseInt(draggedId.split('-').pop() || '0');
+                            if (isNaN(draggedIndex)) return;
+
+                            const draggedImage = additionalImages[draggedIndex];
+
+                            additionalImages[draggedIndex] = targetImage || '';
+                            additionalImages[index] = draggedImage || '';
+
+                            setFormData(prev => ({ ...prev, additionalImages }));
                           }
                         }}
                       />
-                      <label
-                        htmlFor="main-photo-upload"
-                        className="group relative w-10 h-10 bg-stone-100 rounded border border-stone-300 flex items-center justify-center shrink-0 cursor-pointer hover:bg-stone-200 transition"
-                        title="Alterar Foto de Capa"
-                      >
-                        {formData.photoUrl ? (
-                          <>
-                            <img src={formData.photoUrl} alt="Preview" className="w-full h-full object-cover rounded overflow-hidden" />
-                            <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 h-48 bg-white p-1 rounded-lg shadow-xl border border-stone-200 z-50 pointer-events-none">
-                              <img src={formData.photoUrl} alt="Preview Large" className="w-full h-full object-cover rounded" />
-                            </div>
-                          </>
-                        ) : (
-                          <ImageIcon size={16} className="text-stone-500" />
-                        )}
-                      </label>
-                    </div>
-
-
-                    {/* Additional Images */}
-                    <div>
-                      <label className="block text-sm font-medium text-stone-700 mb-1">Fotos Adicionais (Opcional)</label>
-                      <div className="flex flex-col gap-2">
-                        {[0, 1, 2].map((index) => (
-                          <div key={index} className="flex gap-2">
-                            <input
-                              className="w-full border rounded-lg p-2 text-sm"
-                              placeholder={`URL da foto ${index + 2}`}
-                              value={formData.additionalImages?.[index] || ''}
-                              onChange={(e) => {
-                                const newImages = [...(formData.additionalImages || [])];
-                                newImages[index] = e.target.value;
-                                setFormData({ ...formData, additionalImages: newImages });
-                              }}
-                            />
-                            <input
-                              type="file"
-                              id={`additional-image-upload-${index}`}
-                              className="hidden"
-                              accept="image/*"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (!file) return;
-
-                                try {
-                                  const url = await uploadToCloudinary(file);
-                                  const newImages = [...(formData.additionalImages || [])];
-                                  newImages[index] = url;
-                                  setFormData(prev => ({ ...prev, additionalImages: newImages }));
-                                } catch (error) {
-                                  console.error("Error uploading image:", error);
-                                  alert("Erro ao fazer upload da imagem.");
-                                }
-                              }}
-                            />
-                            <label
-                              htmlFor={`additional-image-upload-${index}`}
-                              className="group relative w-9 h-9 bg-stone-100 rounded border border-stone-300 flex items-center justify-center shrink-0 cursor-pointer hover:bg-stone-200 transition"
-                              title="Fazer Upload"
-                            >
-                              {formData.additionalImages?.[index] ? (
-                                <>
-                                  <img src={formData.additionalImages[index]} alt="Preview" className="w-full h-full object-cover rounded overflow-hidden" />
-                                  <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 h-48 bg-white p-1 rounded-lg shadow-xl border border-stone-200 z-50 pointer-events-none">
-                                    <img src={formData.additionalImages[index]} alt="Preview Large" className="w-full h-full object-cover rounded" />
-                                  </div>
-                                </>
-                              ) : (
-                                <ImageIcon size={14} className="text-stone-500" />
-                              )}
-                            </label>
-                            {formData.additionalImages?.[index] && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const currentMain = formData.photoUrl;
-                                  const newMain = formData.additionalImages![index];
-
-                                  const newAdditional = [...(formData.additionalImages || [])];
-                                  newAdditional[index] = currentMain;
-
-                                  setFormData({
-                                    ...formData,
-                                    photoUrl: newMain,
-                                    additionalImages: newAdditional
-                                  });
-                                }}
-                                className="w-9 h-9 flex items-center justify-center text-stone-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg border border-transparent hover:border-amber-200 transition shrink-0"
-                                title="Definir como Foto de Capa"
-                              >
-                                <Star size={18} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1061,76 +1379,80 @@ export const Catalog: React.FC = () => {
       )}
 
       {/* Description Modal */}
-      {isDescriptionModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-stone-800">Editar Descrição</h3>
-                <button
-                  onClick={() => setIsDescriptionModalOpen(false)}
-                  className="p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition"
-                >
-                  <X size={20} className="text-stone-600" />
-                </button>
-              </div>
-              <textarea
-                rows={10}
-                className="w-full border rounded-lg p-4 font-mono text-sm leading-relaxed focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none resize-none"
-                value={formData.description}
-                onChange={e => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Escreva a descrição do produto aqui..."
-                autoFocus
-              />
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsDescriptionModalOpen(false)}
-                  className="bg-rose-600 text-white px-6 py-2 rounded-lg hover:bg-rose-700 transition font-medium"
-                >
-                  Pronto
-                </button>
+      {
+        isDescriptionModalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-stone-800">Editar Descrição</h3>
+                  <button
+                    onClick={() => setIsDescriptionModalOpen(false)}
+                    className="p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition"
+                  >
+                    <X size={20} className="text-stone-600" />
+                  </button>
+                </div>
+                <textarea
+                  rows={10}
+                  className="w-full border rounded-lg p-4 font-mono text-sm leading-relaxed focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none resize-none"
+                  value={formData.description}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Escreva a descrição do produto aqui..."
+                  autoFocus
+                />
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsDescriptionModalOpen(false)}
+                    className="bg-rose-600 text-white px-6 py-2 rounded-lg hover:bg-rose-700 transition font-medium"
+                  >
+                    Pronto
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Recipe Modal */}
-      {isRecipeModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-stone-800">Editar Receita</h3>
-                <button
-                  onClick={() => setIsRecipeModalOpen(false)}
-                  className="p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition"
-                >
-                  <X size={20} className="text-stone-600" />
-                </button>
-              </div>
-              <textarea
-                rows={15}
-                className="w-full border rounded-lg p-4 font-mono text-sm leading-relaxed focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none resize-none"
-                value={formData.recipeText}
-                onChange={e => setFormData({ ...formData, recipeText: e.target.value })}
-                placeholder="Cole a receita aqui..."
-                autoFocus
-              />
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setIsRecipeModalOpen(false)}
-                  className="bg-rose-600 text-white px-6 py-2 rounded-lg hover:bg-rose-700 transition font-medium"
-                >
-                  Pronto
-                </button>
+      {
+        isRecipeModalOpen && (
+          <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl" onClick={e => e.stopPropagation()}>
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-stone-800">Editar Receita</h3>
+                  <button
+                    onClick={() => setIsRecipeModalOpen(false)}
+                    className="p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition"
+                  >
+                    <X size={20} className="text-stone-600" />
+                  </button>
+                </div>
+                <textarea
+                  rows={15}
+                  className="w-full border rounded-lg p-4 font-mono text-sm leading-relaxed focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none resize-none"
+                  value={formData.recipeText}
+                  onChange={e => setFormData({ ...formData, recipeText: e.target.value })}
+                  placeholder="Cole a receita aqui..."
+                  autoFocus
+                />
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsRecipeModalOpen(false)}
+                    className="bg-rose-600 text-white px-6 py-2 rounded-lg hover:bg-rose-700 transition font-medium"
+                  >
+                    Pronto
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* View Product Details Modal */}
       {
@@ -1292,12 +1614,23 @@ export const Catalog: React.FC = () => {
                         <FileText size={18} className="text-rose-500" />
                         Receita Escrita
                       </h3>
-                      <div className="bg-stone-900 p-4 rounded-xl shadow-inner overflow-x-auto">
-                        <ExpandableText
-                          text={viewingProduct.recipeText}
-                          className="text-stone-100 font-mono text-sm whitespace-pre-wrap leading-relaxed"
-                          buttonClassName="text-rose-400 text-sm font-medium mt-2 hover:underline focus:outline-none"
-                        />
+                      <div className="bg-stone-50 border border-stone-200 p-4 rounded-xl shadow-inner overflow-hidden">
+                        {/<[a-z][\s\S]*>/i.test(viewingProduct.recipeText) ? (
+                          <div className="bg-white rounded-lg overflow-hidden border border-stone-200">
+                            <iframe
+                              srcDoc={viewingProduct.recipeText}
+                              className="w-full h-[600px] border-0 bg-white"
+                              title="Receita"
+                              sandbox="allow-same-origin"
+                            />
+                          </div>
+                        ) : (
+                          <ExpandableText
+                            text={viewingProduct.recipeText}
+                            className="text-stone-700 font-mono text-sm whitespace-pre-wrap leading-relaxed"
+                            buttonClassName="text-rose-600 text-sm font-medium mt-2 hover:underline focus:outline-none"
+                          />
+                        )}
                       </div>
                     </div>
                   )}
@@ -1307,6 +1640,190 @@ export const Catalog: React.FC = () => {
           </div>
         )
       }
+      {/* Price History Modal */}
+      {isPriceHistoryModalOpen && priceHistoryProduct && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" onClick={() => setIsPriceHistoryModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div>
+                  <h3 className="text-xl font-bold text-stone-800">Histórico de Preço</h3>
+                  <p className="text-stone-500 text-sm">{priceHistoryProduct.name}</p>
+                </div>
+                <button
+                  onClick={() => setIsPriceHistoryModalOpen(false)}
+                  className="p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition"
+                >
+                  <X size={20} className="text-stone-600" />
+                </button>
+              </div>
+
+              {priceHistoryProduct.priceHistory && priceHistoryProduct.priceHistory.length > 0 ? (
+                <div className="h-[300px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={priceHistoryProduct.priceHistory.map(h => ({
+                        date: new Date(h.date).toLocaleDateString('pt-BR'),
+                        fullDate: new Date(h.date).toLocaleString('pt-BR'),
+                        price: h.price
+                      }))}
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" style={{ fontSize: '12px' }} />
+                      <YAxis style={{ fontSize: '12px' }} unit="R$" width={60} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e7e5e4', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                        formatter={(value: number) => [new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value), 'Preço']}
+                        labelFormatter={(label, payload) => {
+                          if (payload && payload.length > 0 && payload[0].payload) {
+                            return payload[0].payload.fullDate;
+                          }
+                          return label;
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="price"
+                        stroke="#e11d48"
+                        strokeWidth={2}
+                        activeDot={{ r: 8 }}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                  <TrendingUp size={48} className="mx-auto mb-2 opacity-50" />
+                  <p>Sem histórico de variação para este produto.</p>
+                  <p className="text-xs mt-1">O histórico será criado conforme você alterar o preço.</p>
+                </div>
+              )}
+
+              <div className="mt-6 border-t pt-4">
+                <h4 className="font-semibold text-stone-700 mb-3 text-sm">Registro de Alterações</h4>
+                <div className="max-h-40 overflow-y-auto space-y-2">
+                  {priceHistoryProduct.priceHistory && [...priceHistoryProduct.priceHistory].reverse().map((h, idx) => (
+                    <div key={idx} className="flex justify-between text-sm py-2 border-b border-stone-100 last:border-0 hover:bg-stone-50 px-2 rounded">
+                      <span className="text-stone-600">{new Date(h.date).toLocaleString('pt-BR')}</span>
+                      <span className="font-bold text-stone-800">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(h.price)}
+                      </span>
+                    </div>
+                  ))}
+                  {(!priceHistoryProduct.priceHistory || priceHistoryProduct.priceHistory.length === 0) && (
+                    <p className="text-xs text-stone-400 italic text-center">Nenhum registro encontrado.</p>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Price Adjustment Modal */}
+      {isAdjustmentModalOpen && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" onClick={() => setIsAdjustmentModalOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-stone-100 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-stone-800">Ajustes de Preços Recentes</h3>
+                <p className="text-stone-500 text-sm">Produtos que tiveram alteração no valor base</p>
+              </div>
+              <button
+                onClick={() => setIsAdjustmentModalOpen(false)}
+                className="p-2 bg-stone-100 rounded-full hover:bg-stone-200 transition"
+              >
+                <X size={20} className="text-stone-600" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              {products.filter(p => p.priceHistory && p.priceHistory.length > 1).length > 0 ? (
+                <div className="bg-white rounded-xl border border-stone-200 overflow-hidden">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-stone-50 text-stone-500 text-xs uppercase tracking-wider border-b border-stone-200">
+                        <th className="px-4 py-3 font-semibold">Produto</th>
+                        <th className="px-4 py-3 font-semibold">Antigo</th>
+                        <th className="px-4 py-3 font-semibold text-rose-600">Novo</th>
+                        <th className="px-4 py-3 font-semibold">Variação</th>
+                        <th className="px-4 py-3 font-semibold">Última Alteração</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-200">
+                      {products
+                        .filter(p => p.priceHistory && p.priceHistory.length > 1)
+                        .sort((a, b) => {
+                          const lastA = a.priceHistory ? a.priceHistory[a.priceHistory.length - 1].date : 0;
+                          const lastB = b.priceHistory ? b.priceHistory[b.priceHistory.length - 1].date : 0;
+                          return lastB - lastA;
+                        })
+                        .map(product => {
+                          const history = product.priceHistory || [];
+                          const current = history[history.length - 1];
+                          const previous = history[history.length - 2];
+                          const diff = current.price - previous.price;
+                          const percent = (diff / previous.price) * 100;
+
+                          return (
+                            <tr key={product.id} className="hover:bg-stone-50 transition group items-center">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-3">
+                                  <img
+                                    src={product.photoUrl}
+                                    alt={product.name}
+                                    className="w-8 h-8 object-cover rounded border border-stone-200"
+                                    onError={(e) => (e.currentTarget.src = 'https://picsum.photos/200')}
+                                  />
+                                  <span className="font-bold text-stone-800 text-sm">{product.name}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-stone-500 text-sm">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(previous.price)}
+                              </td>
+                              <td className="px-4 py-3 font-bold text-stone-800 text-sm">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(current.price)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className={`text-xs font-bold px-2 py-0.5 rounded ${diff > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                                  {diff > 0 ? '+' : ''}{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(diff)}
+                                  ({percent > 0 ? '+' : ''}{percent.toFixed(1)}%)
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-stone-500 text-xs">
+                                {new Date(current.date).toLocaleString('pt-BR')}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-20 text-stone-400 bg-stone-50 rounded-xl border border-dashed border-stone-200">
+                  <TrendingUp size={48} className="mx-auto mb-2 opacity-50" />
+                  <p>Nenhuma alteração de preço detectada até agora.</p>
+                  <p className="text-sm mt-1">Ao editar um preço, as mudanças aparecerão aqui.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-stone-50 border-t border-stone-100 flex justify-end">
+              <button
+                onClick={() => setIsAdjustmentModalOpen(false)}
+                className="px-6 py-2 bg-stone-800 text-white rounded-lg hover:bg-stone-700 transition font-medium"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div >
   );
 };

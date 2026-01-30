@@ -264,9 +264,20 @@ export const ProductionMode: React.FC<Props> = ({ orderId, onBack }) => {
                       )}
                     </div>
 
-                    <div className="prose prose-stone prose-sm md:prose-base max-w-none font-mono whitespace-pre-wrap text-stone-700 leading-loose">
-                      {product.recipeText}
-                    </div>
+                    {/<[a-z][\s\S]*>/i.test(product.recipeText) ? (
+                      <div className="w-full bg-white rounded-lg overflow-hidden border border-stone-200">
+                        <iframe
+                          srcDoc={product.recipeText}
+                          className="w-full h-[600px] border-0"
+                          title="Receita"
+                          sandbox="allow-same-origin"
+                        />
+                      </div>
+                    ) : (
+                      <div className="prose prose-stone prose-sm md:prose-base max-w-none font-mono whitespace-pre-wrap text-stone-700 leading-loose">
+                        {product.recipeText}
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-stone-400">

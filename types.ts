@@ -23,6 +23,7 @@ export interface Product {
   elo7Link?: string;
   nuvemshopLink?: string;
   showInCatalog?: boolean;
+  priceHistory?: { date: number; price: number }[];
 }
 
 export interface Client {

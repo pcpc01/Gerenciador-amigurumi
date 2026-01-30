@@ -38,6 +38,7 @@ create table products (
   elo7_link text,
   nuvemshop_link text,
   show_in_catalog boolean default true,
+  price_history jsonb default '[]'::jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
